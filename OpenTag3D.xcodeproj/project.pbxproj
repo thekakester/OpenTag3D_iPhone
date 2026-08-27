@@ -175,11 +175,6 @@
 				TargetAttributes = {
 					30DC3AA13040674000C8356E = {
 						CreatedOnToolsVersion = 16.4;
-						SystemCapabilities = {
-							com.apple.NearFieldCommunicationTagReading = {
-								enabled = 1;
-							};
-						};
 					};
 					30DC3AAE3040674200C8356E = {
 						CreatedOnToolsVersion = 16.4;
