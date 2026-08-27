@@ -31,11 +31,13 @@ We hope this project makes the standard easier to explore and encourages people 
 
 There is no separate Android version of this app because compatible Android phones can read and write tags directly from the OpenTag3D website using Web NFC. The native iPhone app provides access to this workflow on iOS, where OpenTag3D's browser-based Web NFC tools are not available.
 
-## Development status
+## Development requirements
 
-The payload parser, editor, and developer interface currently use a bundled dummy OpenTag3D message. Direct NFC reading and writing will be connected once the required Apple NFC provisioning capability is available for the project. The **Write Tag** button is currently a placeholder.
+> [!WARNING]
+> **A paid Apple Developer Program membership is required for NFC development on iPhone.** A free Apple developer account, shown as a **Personal Team** in Xcode, cannot provision an app with the NFC Tag Reading capability. Without a paid membership (or access to a team that has one), you can work on the parser, editor, and interface, but you cannot sign and run this app's NFC read/write functionality on a physical iPhone.
 
 ## References
 
 - [Export Polar Filament RFID data from a spool ID](https://pfil.us/rfid)
 - [OpenTag3D specification](https://opentag3d.info)
+- [Apple's supported iOS capabilities by program membership](https://developer.apple.com/help/account/reference/supported-capabilities-ios)
