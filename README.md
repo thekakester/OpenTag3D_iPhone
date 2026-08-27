@@ -4,6 +4,10 @@ OpenTag3D iPhone Developer Tools is a minimalist iOS app for inspecting and edit
 
 Polar Filament uses and implements OpenTag3D, but does not own or control the standard. This project is not the official OpenTag3D app.
 
+## Authorship and AI assistance
+
+This app was developed by Mitch Davis, a real software engineer, with the assistance of AI. AI tools helped with portions of the development process, while the project's direction, technical decisions, testing, and responsibility remain with the human developer.
+
 ## Purpose
 
 This app is deliberately geared toward developers. It exposes the technical details of an OpenTag3D payload rather than hiding them behind an inventory system or another consumer-facing workflow.

@@ -2,7 +2,7 @@
 //  OpenTag3DApp.swift
 //  OpenTag3D
 //
-//  Created by Mitch Davis on 8/27/26.
+//  Created by Mitch Davis (With AI Assistance) on 8/27/26.
 //
 
 import SwiftUI
