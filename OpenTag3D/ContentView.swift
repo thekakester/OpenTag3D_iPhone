@@ -6,6 +6,7 @@
 //
 
 import SwiftUI
+import OpenTag3DKit
 
 private enum FieldInput: Hashable {
     case human
@@ -87,10 +88,9 @@ private struct DevToolsView: View {
                         focusedEditor: $focusedEditor
                     )
 
-                    ForEach(tagReader.fieldSections) { section in
-                        FieldSection(
-                            title: section.title,
-                            fields: section.fields,
+                    ForEach(tagReader.fields) { field in
+                        FieldBubble(
+                            field: field,
                             focusedEditor: $focusedEditor
                         ) { id, source, text in
                             tagReader.updateField(id: id, source: source, text: text)
@@ -159,30 +159,8 @@ private struct EditableHexSection: View {
     }
 }
 
-private struct FieldSection: View {
-    let title: String
-    let fields: [OpenTag3DFieldValue]
-    let focusedEditor: FocusState<EditorFocus?>.Binding
-    let onCommit: (String, OpenTag3DEditSource, String) -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 12) {
-            Text(title)
-                .font(.headline.bold())
-
-            ForEach(fields) { field in
-                FieldBubble(
-                    field: field,
-                    focusedEditor: focusedEditor,
-                    onCommit: onCommit
-                )
-            }
-        }
-    }
-}
-
 private struct FieldBubble: View {
-    let field: OpenTag3DFieldValue
+    let field: OpenTag3DField
     let focusedEditor: FocusState<EditorFocus?>.Binding
     let onCommit: (String, OpenTag3DEditSource, String) -> Void
 
@@ -190,16 +168,16 @@ private struct FieldBubble: View {
     @State private var numericText: String
     @State private var rawHexText: String
     init(
-        field: OpenTag3DFieldValue,
+        field: OpenTag3DField,
         focusedEditor: FocusState<EditorFocus?>.Binding,
         onCommit: @escaping (String, OpenTag3DEditSource, String) -> Void
     ) {
         self.field = field
         self.focusedEditor = focusedEditor
         self.onCommit = onCommit
-        _humanText = State(initialValue: field.humanReadableValue)
-        _numericText = State(initialValue: field.numericValue)
-        _rawHexText = State(initialValue: field.rawHex)
+        _humanText = State(initialValue: field.humanReadableText)
+        _numericText = State(initialValue: field.numericText)
+        _rawHexText = State(initialValue: field.rawHexText)
     }
 
     var body: some View {
@@ -227,7 +205,7 @@ private struct FieldBubble: View {
                 .humanFieldStyle()
 
             HStack(spacing: 8) {
-                if field.numericValue != "—" {
+                if field.numericText != "—" {
                     TextField("Numeric", text: $numericText)
                         .frame(width: 105)
                         .focused(focusedEditor, equals: focus(for: .numeric))
@@ -259,13 +237,13 @@ private struct FieldBubble: View {
                 commit(input)
             }
         }
-        .onChange(of: field.humanReadableValue) { _, newValue in
+        .onChange(of: field.humanReadableText) { _, newValue in
             humanText = newValue
         }
-        .onChange(of: field.numericValue) { _, newValue in
+        .onChange(of: field.numericText) { _, newValue in
             numericText = newValue
         }
-        .onChange(of: field.rawHex) { _, newValue in
+        .onChange(of: field.rawHexText) { _, newValue in
             rawHexText = newValue
         }
     }

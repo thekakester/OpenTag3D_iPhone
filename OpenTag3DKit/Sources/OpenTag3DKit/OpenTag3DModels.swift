@@ -75,6 +75,8 @@ public struct OpenTag3DField: Identifiable, CustomStringConvertible, Sendable {
     public let length: Int
     public let type: OpenTag3DFieldType
     public let unit: String?
+    /// Multiplier applied to the raw integer value, such as `0.001` for diameter.
+    public let scaling: Double?
     public let addedVersion: String?
     public let usage: String?
     public let isRequired: Bool

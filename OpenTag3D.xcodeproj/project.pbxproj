@@ -6,6 +6,11 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A10000000000000000000003 /* OpenTag3DKit in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000002 /* OpenTag3DKit */; };
+		A10000000000000000000005 /* OpenTag3DKit in Frameworks */ = {isa = PBXBuildFile; productRef = A10000000000000000000004 /* OpenTag3DKit */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXContainerItemProxy section */
 		30DC3AB03040674200C8356E /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -52,6 +57,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000003 /* OpenTag3DKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -59,6 +65,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A10000000000000000000005 /* OpenTag3DKit in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -112,6 +119,7 @@
 			);
 			name = OpenTag3D;
 			packageProductDependencies = (
+				A10000000000000000000002 /* OpenTag3DKit */,
 			);
 			productName = OpenTag3D;
 			productReference = 30DC3AA23040674000C8356E /* OpenTag3D.app */;
@@ -135,6 +143,7 @@
 			);
 			name = OpenTag3DTests;
 			packageProductDependencies = (
+				A10000000000000000000004 /* OpenTag3DKit */,
 			);
 			productName = OpenTag3DTests;
 			productReference = 30DC3AAF3040674200C8356E /* OpenTag3DTests.xctest */;
@@ -200,6 +209,9 @@
 			);
 			mainGroup = 30DC3A993040674000C8356E;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A10000000000000000000001 /* XCLocalSwiftPackageReference "OpenTag3DKit" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = 30DC3AA33040674000C8356E /* Products */;
 			projectDirPath = "";
@@ -565,6 +577,26 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		A10000000000000000000001 /* XCLocalSwiftPackageReference "OpenTag3DKit" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = OpenTag3DKit;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A10000000000000000000002 /* OpenTag3DKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A10000000000000000000001 /* XCLocalSwiftPackageReference "OpenTag3DKit" */;
+			productName = OpenTag3DKit;
+		};
+		A10000000000000000000004 /* OpenTag3DKit */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A10000000000000000000001 /* XCLocalSwiftPackageReference "OpenTag3DKit" */;
+			productName = OpenTag3DKit;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = 30DC3A9A3040674000C8356E /* Project object */;
 }

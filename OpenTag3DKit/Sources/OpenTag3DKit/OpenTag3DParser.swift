@@ -24,7 +24,16 @@ public struct OpenTag3DParser: Sendable {
 
     /// Creates a parser using the current specification bundled with OpenTag3DKit.
     public init() throws {
-        guard let url = Bundle.module.url(forResource: "spec-2003", withExtension: "json") else {
+        try self.init(bundledVersion: 2003)
+    }
+
+    /// Creates a parser using a versioned specification bundled with OpenTag3DKit.
+    /// For example, version `2003` loads `spec-2003.json`.
+    public init(bundledVersion: UInt16) throws {
+        guard let url = Bundle.module.url(
+            forResource: "spec-\(bundledVersion)",
+            withExtension: "json"
+        ) else {
             throw OpenTag3DError.missingDefaultSpecification
         }
         try self.init(specificationJSON: Data(contentsOf: url))
@@ -129,6 +138,7 @@ public struct OpenTag3DParser: Sendable {
             length: definition.length,
             type: definition.type,
             unit: definition.unit,
+            scaling: definition.scaling,
             addedVersion: definition.addedVersion,
             usage: definition.usage,
             isRequired: definition.isRequired,

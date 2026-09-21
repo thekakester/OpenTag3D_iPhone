@@ -5,13 +5,16 @@
 
 import CoreNFC
 import Foundation
+import OpenTag3DKit
 
 /// Reads an OpenTag3D MIME record from an NDEF-compatible NFC tag.
 final class NFCReaderService: NSObject, ObservableObject {
+    private static let openTag3DMIMEType = "application/opentag3d"
+
     @Published private(set) var isReading = false
     @Published private(set) var statusMessage = "Enter a hex payload or scan an OpenTag3D tag."
     @Published private(set) var rawHexText = "00 00 00 00"
-    @Published private(set) var fieldSections: [OpenTag3DFieldSection] = []
+    @Published private(set) var fields: [OpenTag3DField] = []
 
     private var readerSession: NFCNDEFReaderSession?
     private var didFinishCurrentScan = false
@@ -19,13 +22,6 @@ final class NFCReaderService: NSObject, ObservableObject {
     func beginReading() {
         guard NFCNDEFReaderSession.readingAvailable else {
             statusMessage = "NFC reading is not available on this device."
-            return
-        }
-
-        do {
-            _ = try OpenTag3DParser.mimeType()
-        } catch {
-            statusMessage = "Could not load the OpenTag3D specification: \(error.localizedDescription)"
             return
         }
 
@@ -51,7 +47,7 @@ final class NFCReaderService: NSObject, ObservableObject {
             let payload = try refreshDecodedFieldsFromRawHex()
             statusMessage = "Decoded \(payload.count) edited payload bytes."
         } catch {
-            fieldSections = []
+            fields = []
             statusMessage = "Hex edit error: \(error.localizedDescription)"
         }
     }
@@ -59,15 +55,15 @@ final class NFCReaderService: NSObject, ObservableObject {
     /// Encodes one bubble edit into the payload, then derives every display value again.
     func updateField(id: String, source: OpenTag3DEditSource, text: String) {
         do {
-            let currentPayload = try OpenTag3DParser.data(from: rawHexText)
-            let updatedPayload = try OpenTag3DParser.replacingField(
+            let currentPayload = try TagPayloadEditor.data(from: rawHexText)
+            let updatedPayload = try TagPayloadEditor.replacingField(
                 id: id,
                 source: source,
                 text: text,
                 in: currentPayload
             )
 
-            rawHexText = OpenTag3DParser.editableHex(for: updatedPayload)
+            rawHexText = TagPayloadEditor.editableHex(for: updatedPayload)
             try refreshDecodedFieldsFromRawHex()
             statusMessage = "Updated the payload from the edited field."
         } catch {
@@ -78,19 +74,20 @@ final class NFCReaderService: NSObject, ObservableObject {
     /// Rebuilds every displayed field from the current editable hex text.
     @discardableResult
     private func refreshDecodedFieldsFromRawHex() throws -> Data {
-        let payload = try OpenTag3DParser.data(from: rawHexText)
-        fieldSections = try OpenTag3DParser.fieldSections(from: payload)
+        let payload = try TagPayloadEditor.data(from: rawHexText)
+        let parser = try TagPayloadEditor.parser(for: payload)
+        fields = try parser.parse(payload).fields
         return payload
     }
 
     private func finishReading(payload: Data) {
-        rawHexText = OpenTag3DParser.editableHex(for: payload)
+        rawHexText = TagPayloadEditor.editableHex(for: payload)
 
         do {
             try refreshDecodedFieldsFromRawHex()
             statusMessage = "Read an OpenTag3D payload from the NFC tag (\(payload.count) bytes)."
         } catch {
-            fieldSections = []
+            fields = []
             statusMessage = "The tag was read, but its payload could not be decoded: \(error.localizedDescription)"
         }
 
@@ -109,45 +106,35 @@ extension NFCReaderService: NFCNDEFReaderSessionDelegate {
         _ session: NFCNDEFReaderSession,
         didDetectNDEFs messages: [NFCNDEFMessage]
     ) {
-        do {
-            let mimeType = try OpenTag3DParser.mimeType()
-            let matchingRecord = messages
-                .flatMap(\.records)
-                .first { record in
-                    guard record.typeNameFormat == .media,
-                          let recordType = String(data: record.type, encoding: .utf8) else {
-                        return false
-                    }
-                    return recordType.caseInsensitiveCompare(mimeType) == .orderedSame
+        let matchingRecord = messages
+            .flatMap(\.records)
+            .first { record in
+                guard record.typeNameFormat == .media,
+                      let recordType = String(data: record.type, encoding: .utf8) else {
+                    return false
                 }
-
-            guard let matchingRecord else {
-                didFinishCurrentScan = true
-                session.invalidate(
-                    errorMessage: "This tag does not contain an application/opentag3d record."
-                )
-                DispatchQueue.main.async { [weak self] in
-                    self?.isReading = false
-                    self?.statusMessage = "The tag does not contain an OpenTag3D NDEF record."
-                }
-                return
+                return recordType.caseInsensitiveCompare(Self.openTag3DMIMEType) == .orderedSame
             }
 
+        guard let matchingRecord else {
             didFinishCurrentScan = true
-            session.alertMessage = "OpenTag3D tag read successfully."
-            session.invalidate()
-
-            let payload = matchingRecord.payload
-            DispatchQueue.main.async { [weak self] in
-                self?.finishReading(payload: payload)
-            }
-        } catch {
-            didFinishCurrentScan = true
-            session.invalidate(errorMessage: "The OpenTag3D specification could not be loaded.")
+            session.invalidate(
+                errorMessage: "This tag does not contain an application/opentag3d record."
+            )
             DispatchQueue.main.async { [weak self] in
                 self?.isReading = false
-                self?.statusMessage = "Could not process the NFC tag: \(error.localizedDescription)"
+                self?.statusMessage = "The tag does not contain an OpenTag3D NDEF record."
             }
+            return
+        }
+
+        didFinishCurrentScan = true
+        session.alertMessage = "OpenTag3D tag read successfully."
+        session.invalidate()
+
+        let payload = matchingRecord.payload
+        DispatchQueue.main.async { [weak self] in
+            self?.finishReading(payload: payload)
         }
     }
 
