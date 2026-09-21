@@ -36,7 +36,7 @@ struct ContentView: View {
 }
 
 private struct DevToolsView: View {
-    @StateObject private var tagReader = DummyTagReaderService()
+    @StateObject private var tagReader = NFCReaderService()
     @FocusState private var focusedEditor: EditorFocus?
 
     var body: some View {
@@ -87,20 +87,10 @@ private struct DevToolsView: View {
                         focusedEditor: $focusedEditor
                     )
 
-                    if !tagReader.coreFields.isEmpty {
+                    ForEach(tagReader.fieldSections) { section in
                         FieldSection(
-                            title: "CORE",
-                            fields: tagReader.coreFields,
-                            focusedEditor: $focusedEditor
-                        ) { id, source, text in
-                            tagReader.updateField(id: id, source: source, text: text)
-                        }
-                    }
-
-                    if !tagReader.extendedFields.isEmpty {
-                        FieldSection(
-                            title: "EXTENDED",
-                            fields: tagReader.extendedFields,
+                            title: section.title,
+                            fields: section.fields,
                             focusedEditor: $focusedEditor
                         ) { id, source, text in
                             tagReader.updateField(id: id, source: source, text: text)

@@ -5,9 +5,9 @@
 
 import Foundation
 
-enum OpenTag3DSection: String {
-    case core = "CORE"
-    case extended = "EXTENDED"
+struct OpenTag3DSection: Identifiable, Hashable {
+    let id: String
+    let title: String
 }
 
 struct OpenTag3DFieldValue: Identifiable {
@@ -23,6 +23,12 @@ struct OpenTag3DFieldValue: Identifiable {
     var offsetDescription: String {
         String(format: "0x%02X (%d byte%@)", offset, length, length == 1 ? "" : "s")
     }
+}
+
+struct OpenTag3DFieldSection: Identifiable {
+    let id: String
+    let title: String
+    let fields: [OpenTag3DFieldValue]
 }
 
 enum OpenTag3DHexError: LocalizedError {
@@ -48,6 +54,7 @@ enum OpenTag3DEditSource {
 enum OpenTag3DEditError: LocalizedError {
     case unknownField
     case numericNotApplicable
+    case unsupportedType(String)
     case invalidValue(String)
     case outOfRange(maximum: UInt64)
     case wrongByteCount(expected: Int, actual: Int)
@@ -59,6 +66,8 @@ enum OpenTag3DEditError: LocalizedError {
             return "That OpenTag3D field is not recognized."
         case .numericNotApplicable:
             return "This text field does not have a numeric representation."
+        case .unsupportedType(let type):
+            return "The bundled specification uses the unsupported field type “\(type)”."
         case .invalidValue(let expected):
             return "Enter \(expected)."
         case .outOfRange(let maximum):
@@ -66,12 +75,34 @@ enum OpenTag3DEditError: LocalizedError {
         case .wrongByteCount(let expected, let actual):
             return "Raw hex requires exactly \(expected) bytes; \(actual) were entered."
         case .textTooLong(let maximum):
-            return "The text is too long for this field (maximum \(maximum) UTF-8 bytes)."
+            return "The text is too long for this field (maximum \(maximum) bytes)."
+        }
+    }
+}
+
+enum OpenTag3DSpecError: LocalizedError {
+    case missingFile
+    case invalidOffset(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .missingFile:
+            return "spec.json is missing from the app bundle."
+        case .invalidOffset(let offset):
+            return "The OpenTag3D specification contains an invalid offset: \(offset)."
         }
     }
 }
 
 enum OpenTag3DParser {
+    static func mimeType() throws -> String {
+        try specification().mimeType
+    }
+
+    static func specificationVersion() throws -> String {
+        try specification().version
+    }
+
     static func data(from hexText: String) throws -> Data {
         let compactHex = hexText.filter { !$0.isWhitespace }
 
@@ -106,39 +137,19 @@ enum OpenTag3DParser {
         .joined(separator: "\n")
     }
 
-    static func fields(from data: Data) -> [OpenTag3DFieldValue] {
-        definitions.map { definition in
-            let end = definition.offset + definition.length
-            let bytes = definition.offset < data.count
-                ? Data(data[definition.offset..<min(end, data.count)])
-                : Data()
-            let rawHex = bytes.isEmpty
-                ? "—"
-                : bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
-
-            guard bytes.count == definition.length else {
-                return OpenTag3DFieldValue(
-                    id: definition.id,
-                    section: definition.section,
-                    name: definition.name,
-                    offset: definition.offset,
-                    length: definition.length,
-                    rawHex: rawHex,
-                    numericValue: "—",
-                    humanReadableValue: "Not present"
-                )
+    static func fieldSections(from data: Data) throws -> [OpenTag3DFieldSection] {
+        try specification().sections.map { sectionDefinition in
+            let section = OpenTag3DSection(
+                id: sectionDefinition.id,
+                title: sectionDefinition.title
+            )
+            let fields = try sectionDefinition.fields.map { definition in
+                try fieldValue(for: definition, section: section, data: data)
             }
-
-            let decoded = definition.decode([UInt8](bytes))
-            return OpenTag3DFieldValue(
-                id: definition.id,
-                section: definition.section,
-                name: definition.name,
-                offset: definition.offset,
-                length: definition.length,
-                rawHex: rawHex,
-                numericValue: decoded.numeric,
-                humanReadableValue: decoded.humanReadable
+            return OpenTag3DFieldSection(
+                id: section.id,
+                title: section.title,
+                fields: fields
             )
         }
     }
@@ -149,7 +160,9 @@ enum OpenTag3DParser {
         text: String,
         in originalData: Data
     ) throws -> Data {
-        guard let definition = definitions.first(where: { $0.id == id }) else {
+        guard let definition = try specification().sections
+            .flatMap(\.fields)
+            .first(where: { $0.id == id }) else {
             throw OpenTag3DEditError.unknownField
         }
 
@@ -181,113 +194,193 @@ enum OpenTag3DParser {
         return updatedData
     }
 
-    private struct DecodedValue {
-        let numeric: String
-        let humanReadable: String
+    private static func fieldValue(
+        for definition: FieldDefinition,
+        section: OpenTag3DSection,
+        data: Data
+    ) throws -> OpenTag3DFieldValue {
+        let end = definition.offset + definition.length
+        let bytes = definition.offset < data.count
+            ? Data(data[definition.offset..<min(end, data.count)])
+            : Data()
+        let rawHex = bytes.isEmpty
+            ? "—"
+            : bytes.map { String(format: "%02X", $0) }.joined(separator: " ")
+
+        guard bytes.count == definition.length else {
+            return OpenTag3DFieldValue(
+                id: definition.id,
+                section: section,
+                name: definition.name,
+                offset: definition.offset,
+                length: definition.length,
+                rawHex: rawHex,
+                numericValue: "—",
+                humanReadableValue: "Not present"
+            )
+        }
+
+        let decoded = try decode([UInt8](bytes), using: definition)
+        return OpenTag3DFieldValue(
+            id: definition.id,
+            section: section,
+            name: definition.name,
+            offset: definition.offset,
+            length: definition.length,
+            rawHex: rawHex,
+            numericValue: decoded.numeric,
+            humanReadableValue: decoded.humanReadable
+        )
     }
 
-    private struct FieldDefinition {
-        let id: String
-        let section: OpenTag3DSection
-        let name: String
-        let offset: Int
-        let length: Int
-        let decode: ([UInt8]) -> DecodedValue
+    private static func decode(
+        _ bytes: [UInt8],
+        using definition: FieldDefinition
+    ) throws -> DecodedValue {
+        switch definition.type {
+        case "int":
+            let value = unsignedInteger(bytes)
+            return DecodedValue(
+                numeric: String(value),
+                humanReadable: humanReadableInteger(value, definition: definition)
+            )
+        case "utf8", "ascii":
+            let content = bytes.prefix { $0 != 0 }
+            let value = String(decoding: content, as: UTF8.self)
+            return DecodedValue(numeric: "—", humanReadable: value.isEmpty ? "(empty)" : value)
+        case "rgba":
+            let numeric = bytes.map(String.init).joined(separator: ", ")
+            let hex = bytes.map { String(format: "%02X", $0) }.joined()
+            return DecodedValue(numeric: numeric, humanReadable: "#\(hex) (RGBA)")
+        case "date":
+            guard bytes.count == 4 else {
+                throw OpenTag3DEditError.wrongByteCount(expected: 4, actual: bytes.count)
+            }
+            let year = unsignedInteger(Array(bytes[0...1]))
+            return DecodedValue(
+                numeric: "\(year), \(bytes[2]), \(bytes[3])",
+                humanReadable: String(format: "%04llu-%02d-%02d", year, bytes[2], bytes[3])
+            )
+        case "time":
+            guard bytes.count == 3 else {
+                throw OpenTag3DEditError.wrongByteCount(expected: 3, actual: bytes.count)
+            }
+            return DecodedValue(
+                numeric: bytes.map(String.init).joined(separator: ", "),
+                humanReadable: String(format: "%02d:%02d:%02d UTC", bytes[0], bytes[1], bytes[2])
+            )
+        default:
+            throw OpenTag3DEditError.unsupportedType(definition.type)
+        }
     }
 
-    private static func unsignedInteger(_ bytes: [UInt8]) -> UInt64 {
-        bytes.reduce(0) { ($0 << 8) | UInt64($1) }
+    private static func humanReadableInteger(
+        _ value: UInt64,
+        definition: FieldDefinition
+    ) -> String {
+        let scaling = definition.scaling ?? 1
+        let scaledValue = Double(value) * scaling
+        let places = decimalPlaces(for: scaling)
+        let formatted = places == 0
+            ? String(format: "%.0f", scaledValue)
+            : String(format: "%.*f", places, scaledValue)
+
+        guard let unit = definition.unit, !unit.isEmpty, unit != "version" else {
+            return formatted
+        }
+        return "\(formatted) \(unit)"
     }
 
-    private static let textFieldIDs: Set<String> = [
-        "material_base", "material_mod", "manufacturer", "color_name",
-        "online_data_url", "serial"
-    ]
-
-    private static let temperatureFieldIDs: Set<String> = [
-        "print_temp", "bed_temp", "mfi_temp", "max_dry_temp",
-        "min_print_temp", "max_print_temp", "min_bed_temp", "max_bed_temp"
-    ]
+    private static func decimalPlaces(for scaling: Double) -> Int {
+        guard scaling > 0, scaling < 1 else { return 0 }
+        var shifted = scaling
+        for places in 1...6 {
+            shifted *= 10
+            if abs(shifted.rounded() - shifted) < 0.000_000_1 {
+                return places
+            }
+        }
+        return 6
+    }
 
     private static func bytesFromNumericText(
         _ text: String,
         for definition: FieldDefinition
     ) throws -> [UInt8] {
-        if textFieldIDs.contains(definition.id) {
+        switch definition.type {
+        case "utf8", "ascii":
             throw OpenTag3DEditError.numericNotApplicable
-        }
-        if definition.id.hasPrefix("color_") {
-            return try byteList(from: text, count: 4)
-        }
-        if definition.id == "mfg_date" {
+        case "rgba":
+            return try byteList(from: text, count: definition.length)
+        case "date":
             let values = try integerList(from: text, count: 3)
             return try dateBytes(year: values[0], month: values[1], day: values[2])
-        }
-        if definition.id == "mfg_time" {
+        case "time":
             let values = try integerList(from: text, count: 3)
             return try timeBytes(hour: values[0], minute: values[1], second: values[2])
+        case "int":
+            guard let value = UInt64(text.trimmingCharacters(in: .whitespacesAndNewlines)) else {
+                throw OpenTag3DEditError.invalidValue("an unsigned integer")
+            }
+            return try bigEndianBytes(value, length: definition.length)
+        default:
+            throw OpenTag3DEditError.unsupportedType(definition.type)
         }
-
-        guard let value = UInt64(text.trimmingCharacters(in: .whitespacesAndNewlines)) else {
-            throw OpenTag3DEditError.invalidValue("an unsigned integer")
-        }
-        return try bigEndianBytes(value, length: definition.length)
     }
 
     private static func bytesFromHumanText(
         _ text: String,
         for definition: FieldDefinition
     ) throws -> [UInt8] {
-        if textFieldIDs.contains(definition.id) {
+        switch definition.type {
+        case "utf8", "ascii":
             let value = text == "(empty)" ? "" : text
             let bytes = [UInt8](value.utf8)
-            if definition.id == "online_data_url", bytes.contains(where: { $0 > 0x7F }) {
-                throw OpenTag3DEditError.invalidValue("an ASCII URL")
+            if definition.type == "ascii", bytes.contains(where: { $0 > 0x7F }) {
+                throw OpenTag3DEditError.invalidValue("ASCII text")
             }
             guard bytes.count <= definition.length else {
                 throw OpenTag3DEditError.textTooLong(maximum: definition.length)
             }
             return bytes + Array(repeating: 0, count: definition.length - bytes.count)
-        }
-        if definition.id.hasPrefix("color_") {
+        case "rgba":
             let beforeDescription = text.split(separator: "(", maxSplits: 1)[0]
             let hex = beforeDescription.filter { $0.isHexDigit }
-            guard hex.count == 8 else {
-                throw OpenTag3DEditError.invalidValue("an 8-digit RRGGBBAA color")
+            guard hex.count == definition.length * 2 else {
+                throw OpenTag3DEditError.invalidValue(
+                    "a \(definition.length * 2)-digit hexadecimal color"
+                )
             }
             return [UInt8](try data(from: hex))
-        }
-        if definition.id == "mfg_date" {
+        case "date":
             let values = try integerList(from: text, count: 3)
             return try dateBytes(year: values[0], month: values[1], day: values[2])
-        }
-        if definition.id == "mfg_time" {
-            let withoutUTC = text.replacingOccurrences(of: "UTC", with: "", options: .caseInsensitive)
+        case "time":
+            let withoutUTC = text.replacingOccurrences(
+                of: "UTC",
+                with: "",
+                options: .caseInsensitive
+            )
             let values = try integerList(from: withoutUTC, count: 3)
             return try timeBytes(hour: values[0], minute: values[1], second: values[2])
-        }
-
-        let displayedValue = try firstDecimal(in: text)
-        let rawValue: Double
-        switch definition.id {
-        case "tag_version", "target_diameter", "density":
-            rawValue = displayedValue * 1_000
-        case "td", "mfi_value":
-            rawValue = displayedValue * 10
-        case let id where temperatureFieldIDs.contains(id):
-            rawValue = displayedValue / 5
-        case "mfi_load":
-            rawValue = text.lowercased().contains("kg")
-                ? displayedValue * 100
-                : displayedValue / 10
+        case "int":
+            let displayedValue = try firstDecimal(in: text)
+            let scaling = definition.scaling ?? 1
+            guard scaling > 0 else {
+                throw OpenTag3DEditError.invalidValue("a field with positive scaling")
+            }
+            let rawValue = displayedValue / scaling
+            guard rawValue.isFinite,
+                  rawValue >= 0,
+                  abs(rawValue.rounded() - rawValue) < 0.000_000_1 else {
+                throw OpenTag3DEditError.invalidValue(
+                    "a value representable using the field's scaling"
+                )
+            }
+            return try bigEndianBytes(UInt64(rawValue.rounded()), length: definition.length)
         default:
-            rawValue = displayedValue
+            throw OpenTag3DEditError.unsupportedType(definition.type)
         }
-
-        guard rawValue.isFinite, rawValue >= 0, rawValue.rounded() == rawValue else {
-            throw OpenTag3DEditError.invalidValue("a value representable by this field’s scaling")
-        }
-        return try bigEndianBytes(UInt64(rawValue), length: definition.length)
     }
 
     private static func firstDecimal(in text: String) throws -> Double {
@@ -332,113 +425,160 @@ enum OpenTag3DParser {
     }
 
     private static func bigEndianBytes(_ value: UInt64, length: Int) throws -> [UInt8] {
-        let maximum = (UInt64(1) << UInt64(length * 8)) - 1
+        let maximum = length >= MemoryLayout<UInt64>.size
+            ? UInt64.max
+            : (UInt64(1) << UInt64(length * 8)) - 1
         guard value <= maximum else {
             throw OpenTag3DEditError.outOfRange(maximum: maximum)
         }
         return (0..<length).map { index in
-            let shift = UInt64((length - index - 1) * 8)
-            return UInt8((value >> shift) & 0xFF)
+            let shift = (length - index - 1) * 8
+            return shift >= 64 ? 0 : UInt8((value >> UInt64(shift)) & 0xFF)
         }
     }
 
-    private static func integer(
-        id: String,
-        section: OpenTag3DSection,
-        name: String,
-        offset: Int,
-        length: Int,
-        humanReadable: @escaping (UInt64) -> String
-    ) -> FieldDefinition {
-        FieldDefinition(id: id, section: section, name: name, offset: offset, length: length) { bytes in
-            let value = unsignedInteger(bytes)
-            return DecodedValue(numeric: String(value), humanReadable: humanReadable(value))
+    private static func unsignedInteger(_ bytes: [UInt8]) -> UInt64 {
+        bytes.reduce(0) { ($0 << 8) | UInt64($1) }
+    }
+
+    private static func specification() throws -> Specification {
+        try specificationResult.get()
+    }
+
+    private static let specificationResult: Result<Specification, Error> = Result {
+        let bundles = [Bundle.main, Bundle(for: OpenTag3DBundleLocator.self)]
+        guard let fileURL = bundles.lazy.compactMap({
+            $0.url(forResource: "spec", withExtension: "json")
+        }).first else {
+            throw OpenTag3DSpecError.missingFile
+        }
+
+        let data = try Data(contentsOf: fileURL)
+        let document = try JSONDecoder().decode(SpecDocument.self, from: data)
+        let sections = try document.sections.map { section in
+            SectionDefinition(
+                id: section.id,
+                title: section.id.replacingOccurrences(of: "_", with: " ").uppercased(),
+                startOffset: try offset(from: section.value.addressRange.start),
+                fields: try section.value.fields.map { field in
+                    FieldDefinition(
+                        id: field.id,
+                        name: field.name,
+                        type: field.type.lowercased(),
+                        unit: field.unit,
+                        scaling: field.scaling,
+                        offset: try offset(from: field.start),
+                        length: field.length
+                    )
+                }
+            )
+        }
+        .sorted { $0.startOffset < $1.startOffset }
+
+        return Specification(
+            version: document.version,
+            mimeType: document.mimeType,
+            sections: sections
+        )
+    }
+
+    private static func offset(from text: String) throws -> Int {
+        let digits = text.lowercased().hasPrefix("0x") ? String(text.dropFirst(2)) : text
+        guard let value = Int(digits, radix: 16) else {
+            throw OpenTag3DSpecError.invalidOffset(text)
+        }
+        return value
+    }
+
+    private struct DecodedValue {
+        let numeric: String
+        let humanReadable: String
+    }
+
+    private struct Specification {
+        let version: String
+        let mimeType: String
+        let sections: [SectionDefinition]
+    }
+
+    private struct SectionDefinition {
+        let id: String
+        let title: String
+        let startOffset: Int
+        let fields: [FieldDefinition]
+    }
+
+    private struct FieldDefinition {
+        let id: String
+        let name: String
+        let type: String
+        let unit: String?
+        let scaling: Double?
+        let offset: Int
+        let length: Int
+    }
+
+    private struct SpecDocument: Decodable {
+        let version: String
+        let mimeType: String
+        let sections: [(id: String, value: SpecSection)]
+
+        init(from decoder: Decoder) throws {
+            let container = try decoder.container(keyedBy: DynamicCodingKey.self)
+            version = try container.decode(String.self, forKey: DynamicCodingKey("version"))
+            mimeType = try container.decode(String.self, forKey: DynamicCodingKey("mime_type"))
+            sections = try container.allKeys.compactMap { key in
+                guard key.stringValue != "version", key.stringValue != "mime_type" else {
+                    return nil
+                }
+                return (
+                    id: key.stringValue,
+                    value: try container.decode(SpecSection.self, forKey: key)
+                )
+            }
         }
     }
 
-    private static func text(
-        id: String,
-        section: OpenTag3DSection,
-        name: String,
-        offset: Int,
-        length: Int
-    ) -> FieldDefinition {
-        FieldDefinition(id: id, section: section, name: name, offset: offset, length: length) { bytes in
-            let content = bytes.prefix { $0 != 0 }
-            let value = String(decoding: content, as: UTF8.self)
-            return DecodedValue(numeric: "—", humanReadable: value.isEmpty ? "(empty)" : value)
+    private struct SpecSection: Decodable {
+        let addressRange: SpecAddressRange
+        let fields: [SpecField]
+
+        private enum CodingKeys: String, CodingKey {
+            case addressRange = "address_range"
+            case fields
         }
     }
 
-    private static func rgba(id: String, name: String, offset: Int) -> FieldDefinition {
-        FieldDefinition(id: id, section: .core, name: name, offset: offset, length: 4) { bytes in
-            let numeric = bytes.map(String.init).joined(separator: ", ")
-            let hex = bytes.map { String(format: "%02X", $0) }.joined()
-            return DecodedValue(numeric: numeric, humanReadable: "#\(hex) (RGBA)")
+    private struct SpecAddressRange: Decodable {
+        let start: String
+    }
+
+    private struct SpecField: Decodable {
+        let name: String
+        let id: String
+        let unit: String?
+        let type: String
+        let scaling: Double?
+        let start: String
+        let length: Int
+    }
+
+    private struct DynamicCodingKey: CodingKey {
+        let stringValue: String
+        let intValue: Int? = nil
+
+        init(_ stringValue: String) {
+            self.stringValue = stringValue
+        }
+
+        init?(stringValue: String) {
+            self.init(stringValue)
+        }
+
+        init?(intValue: Int) {
+            return nil
         }
     }
-
-    private static func decimal(_ value: Double, places: Int) -> String {
-        String(format: "%.*f", places, value)
-    }
-
-    // OpenTag3D v1.001. Offsets are relative to the start of the NDEF payload.
-    private static let definitions: [FieldDefinition] = [
-        integer(id: "tag_version", section: .core, name: "Tag Version", offset: 0x00, length: 2) {
-            decimal(Double($0) * 0.001, places: 3)
-        },
-        text(id: "material_base", section: .core, name: "Base Material Name", offset: 0x02, length: 5),
-        text(id: "material_mod", section: .core, name: "Material Modifiers", offset: 0x07, length: 5),
-        text(id: "manufacturer", section: .core, name: "Filament Manufacturer", offset: 0x1B, length: 16),
-        text(id: "color_name", section: .core, name: "Color Name", offset: 0x2B, length: 32),
-        rgba(id: "color_1", name: "Color 1 Hex", offset: 0x4B),
-        rgba(id: "color_2", name: "Color 2 Hex", offset: 0x50),
-        rgba(id: "color_3", name: "Color 3 Hex", offset: 0x54),
-        rgba(id: "color_4", name: "Color 4 Hex", offset: 0x58),
-        integer(id: "target_diameter", section: .core, name: "Target Diameter", offset: 0x5C, length: 2) {
-            "\(decimal(Double($0) * 0.001, places: 3)) mm"
-        },
-        integer(id: "target_weight", section: .core, name: "Target Weight", offset: 0x5E, length: 2) { "\($0) g" },
-        integer(id: "print_temp", section: .core, name: "Print Temperature", offset: 0x60, length: 1) { "\($0 * 5) °C" },
-        integer(id: "bed_temp", section: .core, name: "Bed Temperature", offset: 0x61, length: 1) { "\($0 * 5) °C" },
-        integer(id: "density", section: .core, name: "Density", offset: 0x62, length: 2) {
-            "\(decimal(Double($0) * 0.001, places: 3)) g/cm³"
-        },
-        integer(id: "td", section: .core, name: "Transmission Distance (TD)", offset: 0x64, length: 2) {
-            "\(decimal(Double($0) * 0.1, places: 1)) mm"
-        },
-
-        text(id: "online_data_url", section: .extended, name: "Online Data URL", offset: 0x70, length: 32),
-        text(id: "serial", section: .extended, name: "Serial Number / Batch ID", offset: 0x90, length: 16),
-        FieldDefinition(id: "mfg_date", section: .extended, name: "Manufacture Date", offset: 0xA0, length: 4) { bytes in
-            let year = unsignedInteger(Array(bytes[0...1]))
-            let numeric = "\(year), \(bytes[2]), \(bytes[3])"
-            return DecodedValue(numeric: numeric, humanReadable: String(format: "%04llu-%02d-%02d", year, bytes[2], bytes[3]))
-        },
-        FieldDefinition(id: "mfg_time", section: .extended, name: "Manufacture Time", offset: 0xA4, length: 3) { bytes in
-            let numeric = bytes.map(String.init).joined(separator: ", ")
-            return DecodedValue(numeric: numeric, humanReadable: String(format: "%02d:%02d:%02d UTC", bytes[0], bytes[1], bytes[2]))
-        },
-        integer(id: "spool_core_diameter", section: .extended, name: "Spool Core Diameter", offset: 0xA7, length: 1) { "\($0) mm" },
-        integer(id: "mfi_temp", section: .extended, name: "MFI Temp", offset: 0xA8, length: 1) { "\($0 * 5) °C" },
-        integer(id: "mfi_load", section: .extended, name: "MFI Load", offset: 0xA9, length: 1) {
-            "\($0 * 10) g (\(decimal(Double($0) * 0.01, places: 2)) kg)"
-        },
-        integer(id: "mfi_value", section: .extended, name: "MFI Value", offset: 0xAA, length: 1) {
-            "\(decimal(Double($0) * 0.1, places: 1)) g/10 min"
-        },
-        integer(id: "measured_tolerance", section: .extended, name: "Measured Tolerance", offset: 0xAB, length: 1) { "\($0) µm" },
-        integer(id: "empty_spool_weight", section: .extended, name: "Empty Spool Weight", offset: 0xAC, length: 2) { "\($0) g" },
-        integer(id: "measured_filament_weight", section: .extended, name: "Measured Filament Weight", offset: 0xAE, length: 2) { "\($0) g" },
-        integer(id: "measured_filament_length", section: .extended, name: "Measured Filament Length", offset: 0xB0, length: 2) { "\($0) m" },
-        integer(id: "max_dry_temp", section: .extended, name: "Max Dry Temp", offset: 0xB2, length: 1) { "\($0 * 5) °C" },
-        integer(id: "dry_time", section: .extended, name: "Dry Time", offset: 0xB3, length: 1) { "\($0) hr" },
-        integer(id: "min_print_temp", section: .extended, name: "Min Print Temp", offset: 0xB4, length: 1) { "\($0 * 5) °C" },
-        integer(id: "max_print_temp", section: .extended, name: "Max Print Temp", offset: 0xB5, length: 1) { "\($0 * 5) °C" },
-        integer(id: "min_bed_temp", section: .extended, name: "Min Bed Temp", offset: 0xB6, length: 1) { "\($0 * 5) °C" },
-        integer(id: "max_bed_temp", section: .extended, name: "Max Bed Temp", offset: 0xB7, length: 1) { "\($0 * 5) °C" },
-        integer(id: "min_vso", section: .extended, name: "Min Volumetric Speed", offset: 0xB8, length: 1) { "\($0) mm³/s" },
-        integer(id: "max_vso", section: .extended, name: "Max Volumetric Speed", offset: 0xB9, length: 1) { "\($0) mm³/s" },
-        integer(id: "target_vso", section: .extended, name: "Target Volumetric Speed", offset: 0xBA, length: 1) { "\($0) mm³/s" }
-    ]
 }
+
+private final class OpenTag3DBundleLocator: NSObject {}

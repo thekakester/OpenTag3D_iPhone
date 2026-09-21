@@ -175,6 +175,11 @@
 				TargetAttributes = {
 					30DC3AA13040674000C8356E = {
 						CreatedOnToolsVersion = 16.4;
+						SystemCapabilities = {
+							com.apple.NearFieldCommunicationTagReading = {
+								enabled = 1;
+							};
+						};
 					};
 					30DC3AAE3040674200C8356E = {
 						CreatedOnToolsVersion = 16.4;
@@ -396,7 +401,7 @@
 				CODE_SIGN_ENTITLEMENTS = OpenTag3D/OpenTag3D.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = BK4G8K6W45;
+				DEVELOPMENT_TEAM = QQ79AFQBN4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "OpenTag3D Dev Tools";
@@ -428,7 +433,7 @@
 				CODE_SIGN_ENTITLEMENTS = OpenTag3D/OpenTag3D.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = BK4G8K6W45;
+				DEVELOPMENT_TEAM = QQ79AFQBN4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "OpenTag3D Dev Tools";

@@ -16,7 +16,7 @@ The app is designed to:
 
 - Read an OpenTag3D NDEF payload from an NFC tag.
 - Display and edit the complete payload as hexadecimal bytes.
-- Decode the CORE and EXTENDED fields defined by the OpenTag3D specification.
+- Build its field sections dynamically from the bundled OpenTag3D specification.
 - Show field offsets, lengths, raw hexadecimal data, numeric values, and human-readable values.
 - Encode edited field values back into the raw payload.
 - Write the resulting OpenTag3D payload to an NFC tag.
