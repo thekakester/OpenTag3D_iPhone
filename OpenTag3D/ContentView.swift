@@ -37,7 +37,7 @@ struct ContentView: View {
 }
 
 private struct DevToolsView: View {
-    @StateObject private var tagReader = NFCReaderService()
+    @StateObject private var tagReader = NFCReaderWriterService()
     @FocusState private var focusedEditor: EditorFocus?
 
     var body: some View {
@@ -56,7 +56,7 @@ private struct DevToolsView: View {
                             .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(tagReader.isReading)
+                        .disabled(tagReader.isScanning)
 
                         Link(destination: URL(string: "https://pfil.us/rfid")!) {
                             Text("or Look Up RFID data for any Polar Filament spool")
@@ -85,8 +85,13 @@ private struct DevToolsView: View {
                             get: { tagReader.rawHexText },
                             set: { tagReader.updateRawHexText($0) }
                         ),
-                        focusedEditor: $focusedEditor
-                    )
+                        focusedEditor: $focusedEditor,
+                        isWriting: tagReader.isWriting,
+                        isScanning: tagReader.isScanning
+                    ) {
+                        focusedEditor = nil
+                        tagReader.beginWriting()
+                    }
 
                     ForEach(tagReader.fields) { field in
                         FieldBubble(
@@ -126,6 +131,9 @@ private struct DevToolsView: View {
 private struct EditableHexSection: View {
     @Binding var value: String
     let focusedEditor: FocusState<EditorFocus?>.Binding
+    let isWriting: Bool
+    let isScanning: Bool
+    let onWrite: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
@@ -143,14 +151,14 @@ private struct EditableHexSection: View {
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
 
             Button {
-                // Placeholder until NFC writing is enabled for the developer account.
+                onWrite()
             } label: {
-                Label("Write Tag", systemImage: "wave.3.right")
+                Label(isWriting ? "Writing…" : "Write Tag", systemImage: "wave.3.right")
                     .font(.subheadline)
                     .frame(maxWidth: .infinity)
             }
             .buttonStyle(.bordered)
-            .disabled(true)
+            .disabled(isScanning)
 
             Text("Editable hexadecimal payload bytes. Offsets below start at the first byte shown here.")
                 .font(.caption)
