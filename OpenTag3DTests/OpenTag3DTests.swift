@@ -11,6 +11,45 @@ import Testing
 @testable import OpenTag3D_Dev_Tools
 
 struct OpenTag3DTests {
+    @Test func normalizesPolarFilamentSerialNumber() {
+        #expect(NFCReaderWriterService.normalizedSerialNumber("  1234-abcd\n") == "1234-ABCD")
+    }
+
+    @Test func buildsPolarFilamentImportURL() {
+        let url = NFCReaderWriterService.polarFilamentImportURL(for: " 50017-fyg5 ")
+
+        #expect(
+            url?.absoluteString
+                == "https://pfil.us/opentag3d.php?id=50017-FYG5&mode=core&format=hex"
+        )
+    }
+
+    @Test func extractsSerialNumberFromSupportedQRCodes() throws {
+        #expect(
+            try NFCReaderWriterService.serialNumber(fromQRCode: "3dqr.co?i=50017-fyg5")
+                == "50017-FYG5"
+        )
+        #expect(
+            try NFCReaderWriterService.serialNumber(
+                fromQRCode: "https://pfil.us?i=1234-abcd"
+            ) == "1234-ABCD"
+        )
+    }
+
+    @Test func rejectsUnsupportedQRCodeHost() {
+        #expect(throws: TagImportError.unsupportedQRCodeHost) {
+            try NFCReaderWriterService.serialNumber(
+                fromQRCode: "https://example.com?i=50017-FYG5"
+            )
+        }
+    }
+
+    @Test func rejectsQRCodeWithoutSerialNumber() {
+        #expect(throws: TagImportError.missingQRCodeSerialNumber) {
+            try NFCReaderWriterService.serialNumber(fromQRCode: "https://pfil.us")
+        }
+    }
+
     @Test func fallsBackWithinMajorVersionAndReturnsWarning() throws {
         let payload = Data([0x07, 0xD2])
         let plan = try TagPayloadEditor.decodingPlan(for: payload)

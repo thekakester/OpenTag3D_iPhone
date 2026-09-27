@@ -7,6 +7,38 @@ import CoreNFC
 import Foundation
 import OpenTag3DKit
 
+enum TagImportError: LocalizedError, Equatable {
+    case emptySerialNumber
+    case invalidURL
+    case invalidResponse
+    case httpStatus(Int)
+    case invalidResponseText
+    case invalidQRCodeURL
+    case unsupportedQRCodeHost
+    case missingQRCodeSerialNumber
+
+    var errorDescription: String? {
+        switch self {
+        case .emptySerialNumber:
+            return "Enter a Polar Filament serial number."
+        case .invalidURL:
+            return "The Polar Filament import URL could not be created."
+        case .invalidResponse:
+            return "The Polar Filament API returned an invalid response."
+        case .httpStatus(let statusCode):
+            return "The Polar Filament API returned HTTP status \(statusCode)."
+        case .invalidResponseText:
+            return "The Polar Filament API response is not valid text."
+        case .invalidQRCodeURL:
+            return "The QR code does not contain a valid URL."
+        case .unsupportedQRCodeHost:
+            return "The QR code must use 3dqr.co or pfil.us."
+        case .missingQRCodeSerialNumber:
+            return "The QR code does not contain an i parameter with a serial number."
+        }
+    }
+}
+
 /// Reads and writes an OpenTag3D MIME record on an NDEF-compatible NFC tag.
 final class NFCReaderWriterService: NSObject, ObservableObject {
     private static let openTag3DMIMEType = "application/opentag3d"
@@ -18,6 +50,7 @@ final class NFCReaderWriterService: NSObject, ObservableObject {
 
     @Published private(set) var isReading = false
     @Published private(set) var isWriting = false
+    @Published private(set) var isImporting = false
     @Published private(set) var statusMessage = "Enter a hex payload or scan an OpenTag3D tag."
     @Published private(set) var rawHexText = "00 00 00 00"
     @Published private(set) var fields: [OpenTag3DField] = []
@@ -28,6 +61,164 @@ final class NFCReaderWriterService: NSObject, ObservableObject {
 
     var isScanning: Bool {
         isReading || isWriting
+    }
+
+    var isBusy: Bool {
+        isScanning || isImporting
+    }
+
+    static func normalizedSerialNumber(_ serialNumber: String) -> String {
+        serialNumber
+            .trimmingCharacters(in: .whitespacesAndNewlines)
+            .uppercased()
+    }
+
+    static func polarFilamentImportURL(for serialNumber: String) -> URL? {
+        var components = URLComponents(string: "https://pfil.us/opentag3d.php")
+        components?.queryItems = [
+            URLQueryItem(name: "id", value: normalizedSerialNumber(serialNumber)),
+            URLQueryItem(name: "mode", value: "core"),
+            URLQueryItem(name: "format", value: "hex")
+        ]
+        return components?.url
+    }
+
+    /// Extracts and normalizes a serial number from a supported OpenTag3D QR URL.
+    static func serialNumber(fromQRCode qrCode: String) throws -> String {
+        let trimmedQRCode = qrCode.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmedQRCode.isEmpty == false else {
+            throw TagImportError.invalidQRCodeURL
+        }
+
+        let urlText: String
+        if trimmedQRCode.contains("://") {
+            urlText = trimmedQRCode
+        } else {
+            urlText = "https://\(trimmedQRCode)"
+        }
+
+        guard let components = URLComponents(string: urlText),
+              let host = components.host?.lowercased() else {
+            throw TagImportError.invalidQRCodeURL
+        }
+        guard host == "3dqr.co" || host == "pfil.us" else {
+            throw TagImportError.unsupportedQRCodeHost
+        }
+
+        let serialNumber = components.queryItems?.first { queryItem in
+            queryItem.name.lowercased() == "i"
+        }?.value
+        let normalizedSerialNumber = normalizedSerialNumber(serialNumber ?? "")
+
+        guard normalizedSerialNumber.isEmpty == false else {
+            throw TagImportError.missingQRCodeSerialNumber
+        }
+        return normalizedSerialNumber
+    }
+
+    /// Validates a QR code and sends its serial number through the same import
+    /// path used by manually entered serial numbers.
+    func importPolarFilamentTag(qrCode: String) {
+        do {
+            let serialNumber = try Self.serialNumber(fromQRCode: qrCode)
+            importPolarFilamentTag(serialNumber: serialNumber)
+        } catch {
+            statusMessage = "Could not import QR code: \(error.localizedDescription)"
+        }
+    }
+
+    /// Imports and decodes a Polar Filament tag without changing the current
+    /// payload unless the request and the complete decode both succeed.
+    func importPolarFilamentTag(serialNumber: String) {
+        let normalizedSerialNumber = Self.normalizedSerialNumber(serialNumber)
+        guard normalizedSerialNumber.isEmpty == false else {
+            statusMessage = TagImportError.emptySerialNumber.localizedDescription
+            return
+        }
+        guard let url = Self.polarFilamentImportURL(for: normalizedSerialNumber) else {
+            statusMessage = TagImportError.invalidURL.localizedDescription
+            return
+        }
+
+        isImporting = true
+        statusMessage = "Importing Polar Filament tag \(normalizedSerialNumber)…"
+
+        URLSession.shared.dataTask(with: url) { [weak self] data, response, error in
+            if let error {
+                self?.finishImport(
+                    result: .failure(error),
+                    serialNumber: normalizedSerialNumber
+                )
+                return
+            }
+            guard let httpResponse = response as? HTTPURLResponse else {
+                self?.finishImport(
+                    result: .failure(TagImportError.invalidResponse),
+                    serialNumber: normalizedSerialNumber
+                )
+                return
+            }
+            guard (200...299).contains(httpResponse.statusCode) else {
+                self?.finishImport(
+                    result: .failure(TagImportError.httpStatus(httpResponse.statusCode)),
+                    serialNumber: normalizedSerialNumber
+                )
+                return
+            }
+            guard let data, let hexText = String(data: data, encoding: .utf8) else {
+                self?.finishImport(
+                    result: .failure(TagImportError.invalidResponseText),
+                    serialNumber: normalizedSerialNumber
+                )
+                return
+            }
+
+            do {
+                let payload = try TagPayloadEditor.data(from: hexText)
+                let plan = try TagPayloadEditor.decodingPlan(for: payload)
+                let decodedFields = try plan.parser.parse(payload).fields
+                let importedTag = ImportedTag(
+                    payload: payload,
+                    fields: decodedFields,
+                    warning: plan.warning
+                )
+                self?.finishImport(
+                    result: .success(importedTag),
+                    serialNumber: normalizedSerialNumber
+                )
+            } catch {
+                self?.finishImport(
+                    result: .failure(error),
+                    serialNumber: normalizedSerialNumber
+                )
+            }
+        }.resume()
+    }
+
+    private struct ImportedTag {
+        let payload: Data
+        let fields: [OpenTag3DField]
+        let warning: String?
+    }
+
+    private func finishImport(
+        result: Result<ImportedTag, Error>,
+        serialNumber: String
+    ) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self else { return }
+            self.isImporting = false
+
+            switch result {
+            case .success(let importedTag):
+                self.rawHexText = TagPayloadEditor.editableHex(for: importedTag.payload)
+                self.fields = importedTag.fields
+                self.statusMessage = importedTag.warning
+                    ?? "Imported Polar Filament tag \(serialNumber) (\(importedTag.payload.count) bytes)."
+            case .failure(let error):
+                self.statusMessage = "Could not import tag \(serialNumber): \(error.localizedDescription)"
+            }
+        }
     }
 
     func beginReading() {

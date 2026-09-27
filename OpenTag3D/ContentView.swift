@@ -38,6 +38,9 @@ struct ContentView: View {
 
 private struct DevToolsView: View {
     @StateObject private var tagReader = NFCReaderWriterService()
+    @State private var isShowingSerialImport = false
+    @State private var isShowingQRCodeScanner = false
+    @State private var serialNumber = ""
     @FocusState private var focusedEditor: EditorFocus?
 
     var body: some View {
@@ -56,10 +59,26 @@ private struct DevToolsView: View {
                             .frame(maxWidth: .infinity)
                         }
                         .buttonStyle(.borderedProminent)
-                        .disabled(tagReader.isScanning)
+                        .disabled(tagReader.isBusy)
 
-                        Link(destination: URL(string: "https://pfil.us/rfid")!) {
-                            Text("or Look Up RFID data for any Polar Filament spool")
+                        Menu {
+                            Button {
+                                serialNumber = ""
+                                isShowingSerialImport = true
+                            } label: {
+                                Label("by Polar Filament Serial Number", systemImage: "number")
+                            }
+
+                            Button {
+                                isShowingQRCodeScanner = true
+                            } label: {
+                                Label("by QR Code", systemImage: "qrcode.viewfinder")
+                            }
+                        } label: {
+                            Label(
+                                tagReader.isImporting ? "Importing…" : "Import Tag",
+                                systemImage: "square.and.arrow.down"
+                            )
                                 .font(.caption.weight(.medium))
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 10)
@@ -74,6 +93,7 @@ private struct DevToolsView: View {
                                 }
                         }
                         .buttonStyle(.plain)
+                        .disabled(tagReader.isBusy)
                     }
 
                     Text(tagReader.statusMessage)
@@ -87,7 +107,7 @@ private struct DevToolsView: View {
                         ),
                         focusedEditor: $focusedEditor,
                         isWriting: tagReader.isWriting,
-                        isScanning: tagReader.isScanning
+                        isScanning: tagReader.isBusy
                     ) {
                         focusedEditor = nil
                         tagReader.beginWriting()
@@ -123,6 +143,47 @@ private struct DevToolsView: View {
                 .overlay(alignment: .top) {
                     Divider()
                 }
+            }
+        }
+        .sheet(isPresented: $isShowingSerialImport) {
+            NavigationStack {
+                Form {
+                    Section {
+                        TextField("1234-ABCD", text: $serialNumber)
+                            .textInputAutocapitalization(.characters)
+                            .autocorrectionDisabled()
+                    } header: {
+                        Text("Polar Filament Serial Number")
+                    } footer: {
+                        Text("The imported tag will replace the current hexadecimal payload.")
+                    }
+                }
+                .navigationTitle("Import Tag")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            isShowingSerialImport = false
+                        }
+                    }
+
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Import") {
+                            tagReader.importPolarFilamentTag(serialNumber: serialNumber)
+                            isShowingSerialImport = false
+                        }
+                        .disabled(serialNumber.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    }
+                }
+            }
+            .presentationDetents([.medium])
+        }
+        .fullScreenCover(isPresented: $isShowingQRCodeScanner) {
+            QRCodeScannerView { qrCode in
+                isShowingQRCodeScanner = false
+                tagReader.importPolarFilamentTag(qrCode: qrCode)
+            } onCancel: {
+                isShowingQRCodeScanner = false
             }
         }
     }

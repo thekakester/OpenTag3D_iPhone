@@ -420,6 +420,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "OpenTag3D Dev Tools";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NFCReaderUsageDescription = "Read OpenTag3D data from nearby NFC tags.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Scan OpenTag3D QR codes to import tag data.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
@@ -452,6 +453,7 @@
 				INFOPLIST_KEY_CFBundleDisplayName = "OpenTag3D Dev Tools";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NFCReaderUsageDescription = "Read OpenTag3D data from nearby NFC tags.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Scan OpenTag3D QR codes to import tag data.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
