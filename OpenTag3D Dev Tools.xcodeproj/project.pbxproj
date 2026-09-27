@@ -29,9 +29,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
-		30DC3AA23040674000C8356E /* OpenTag3D.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = OpenTag3D.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		30DC3AAF3040674200C8356E /* OpenTag3DTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenTag3DTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
-		30DC3AB93040674200C8356E /* OpenTag3DUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = OpenTag3DUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		30DC3AA23040674000C8356E /* OpenTag3D Dev Tools.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = "OpenTag3D Dev Tools.app"; sourceTree = BUILT_PRODUCTS_DIR; };
+		30DC3AAF3040674200C8356E /* OpenTag3D Dev ToolsTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "OpenTag3D Dev ToolsTests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
+		30DC3AB93040674200C8356E /* OpenTag3D Dev ToolsUITests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = "OpenTag3D Dev ToolsUITests.xctest"; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -92,9 +92,9 @@
 		30DC3AA33040674000C8356E /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				30DC3AA23040674000C8356E /* OpenTag3D.app */,
-				30DC3AAF3040674200C8356E /* OpenTag3DTests.xctest */,
-				30DC3AB93040674200C8356E /* OpenTag3DUITests.xctest */,
+				30DC3AA23040674000C8356E /* OpenTag3D Dev Tools.app */,
+				30DC3AAF3040674200C8356E /* OpenTag3D Dev ToolsTests.xctest */,
+				30DC3AB93040674200C8356E /* OpenTag3D Dev ToolsUITests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -102,9 +102,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		30DC3AA13040674000C8356E /* OpenTag3D */ = {
+		30DC3AA13040674000C8356E /* OpenTag3D Dev Tools */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 30DC3AC33040674200C8356E /* Build configuration list for PBXNativeTarget "OpenTag3D" */;
+			buildConfigurationList = 30DC3AC33040674200C8356E /* Build configuration list for PBXNativeTarget "OpenTag3D Dev Tools" */;
 			buildPhases = (
 				30DC3A9E3040674000C8356E /* Sources */,
 				30DC3A9F3040674000C8356E /* Frameworks */,
@@ -117,17 +117,17 @@
 			fileSystemSynchronizedGroups = (
 				30DC3AA43040674000C8356E /* OpenTag3D */,
 			);
-			name = OpenTag3D;
+			name = "OpenTag3D Dev Tools";
 			packageProductDependencies = (
 				A10000000000000000000002 /* OpenTag3DKit */,
 			);
 			productName = OpenTag3D;
-			productReference = 30DC3AA23040674000C8356E /* OpenTag3D.app */;
+			productReference = 30DC3AA23040674000C8356E /* OpenTag3D Dev Tools.app */;
 			productType = "com.apple.product-type.application";
 		};
-		30DC3AAE3040674200C8356E /* OpenTag3DTests */ = {
+		30DC3AAE3040674200C8356E /* OpenTag3D Dev ToolsTests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 30DC3AC63040674200C8356E /* Build configuration list for PBXNativeTarget "OpenTag3DTests" */;
+			buildConfigurationList = 30DC3AC63040674200C8356E /* Build configuration list for PBXNativeTarget "OpenTag3D Dev ToolsTests" */;
 			buildPhases = (
 				30DC3AAB3040674200C8356E /* Sources */,
 				30DC3AAC3040674200C8356E /* Frameworks */,
@@ -141,17 +141,17 @@
 			fileSystemSynchronizedGroups = (
 				30DC3AB23040674200C8356E /* OpenTag3DTests */,
 			);
-			name = OpenTag3DTests;
+			name = "OpenTag3D Dev ToolsTests";
 			packageProductDependencies = (
 				A10000000000000000000004 /* OpenTag3DKit */,
 			);
 			productName = OpenTag3DTests;
-			productReference = 30DC3AAF3040674200C8356E /* OpenTag3DTests.xctest */;
+			productReference = 30DC3AAF3040674200C8356E /* OpenTag3D Dev ToolsTests.xctest */;
 			productType = "com.apple.product-type.bundle.unit-test";
 		};
-		30DC3AB83040674200C8356E /* OpenTag3DUITests */ = {
+		30DC3AB83040674200C8356E /* OpenTag3D Dev ToolsUITests */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = 30DC3AC93040674200C8356E /* Build configuration list for PBXNativeTarget "OpenTag3DUITests" */;
+			buildConfigurationList = 30DC3AC93040674200C8356E /* Build configuration list for PBXNativeTarget "OpenTag3D Dev ToolsUITests" */;
 			buildPhases = (
 				30DC3AB53040674200C8356E /* Sources */,
 				30DC3AB63040674200C8356E /* Frameworks */,
@@ -165,11 +165,11 @@
 			fileSystemSynchronizedGroups = (
 				30DC3ABC3040674200C8356E /* OpenTag3DUITests */,
 			);
-			name = OpenTag3DUITests;
+			name = "OpenTag3D Dev ToolsUITests";
 			packageProductDependencies = (
 			);
 			productName = OpenTag3DUITests;
-			productReference = 30DC3AB93040674200C8356E /* OpenTag3DUITests.xctest */;
+			productReference = 30DC3AB93040674200C8356E /* OpenTag3D Dev ToolsUITests.xctest */;
 			productType = "com.apple.product-type.bundle.ui-testing";
 		};
 /* End PBXNativeTarget section */
@@ -181,6 +181,7 @@
 				BuildIndependentTargetsInParallel = 1;
 				LastSwiftUpdateCheck = 1640;
 				LastUpgradeCheck = 1640;
+				ORGANIZATIONNAME = "Polar Filament";
 				TargetAttributes = {
 					30DC3AA13040674000C8356E = {
 						CreatedOnToolsVersion = 16.4;
@@ -200,7 +201,7 @@
 					};
 				};
 			};
-			buildConfigurationList = 30DC3A9D3040674000C8356E /* Build configuration list for PBXProject "OpenTag3D" */;
+			buildConfigurationList = 30DC3A9D3040674000C8356E /* Build configuration list for PBXProject "OpenTag3D Dev Tools" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -217,9 +218,9 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				30DC3AA13040674000C8356E /* OpenTag3D */,
-				30DC3AAE3040674200C8356E /* OpenTag3DTests */,
-				30DC3AB83040674200C8356E /* OpenTag3DUITests */,
+				30DC3AA13040674000C8356E /* OpenTag3D Dev Tools */,
+				30DC3AAE3040674200C8356E /* OpenTag3D Dev ToolsTests */,
+				30DC3AB83040674200C8356E /* OpenTag3D Dev ToolsUITests */,
 			);
 		};
 /* End PBXProject section */
@@ -275,12 +276,12 @@
 /* Begin PBXTargetDependency section */
 		30DC3AB13040674200C8356E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 30DC3AA13040674000C8356E /* OpenTag3D */;
+			target = 30DC3AA13040674000C8356E /* OpenTag3D Dev Tools */;
 			targetProxy = 30DC3AB03040674200C8356E /* PBXContainerItemProxy */;
 		};
 		30DC3ABB3040674200C8356E /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
-			target = 30DC3AA13040674000C8356E /* OpenTag3D */;
+			target = 30DC3AA13040674000C8356E /* OpenTag3D Dev Tools */;
 			targetProxy = 30DC3ABA3040674200C8356E /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -417,11 +418,11 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "OpenTag3D Dev Tools";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NFCReaderUsageDescription = "Read OpenTag3D data from nearby NFC tags.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -433,7 +434,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Debug;
 		};
@@ -449,11 +450,11 @@
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "OpenTag3D Dev Tools";
+				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.developer-tools";
 				INFOPLIST_KEY_NFCReaderUsageDescription = "Read OpenTag3D data from nearby NFC tags.";
 				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
 				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
 				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
-				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPad = "UIInterfaceOrientationPortrait UIInterfaceOrientationPortraitUpsideDown UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				INFOPLIST_KEY_UISupportedInterfaceOrientations_iPhone = "UIInterfaceOrientationPortrait UIInterfaceOrientationLandscapeLeft UIInterfaceOrientationLandscapeRight";
 				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
 				LD_RUNPATH_SEARCH_PATHS = (
@@ -465,7 +466,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 			};
 			name = Release;
 		};
@@ -482,8 +483,8 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenTag3D.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OpenTag3D";
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenTag3D Dev Tools.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OpenTag3D Dev Tools";
 			};
 			name = Debug;
 		};
@@ -500,8 +501,8 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
-				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenTag3D.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OpenTag3D";
+				TARGETED_DEVICE_FAMILY = 1;
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/OpenTag3D Dev Tools.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/OpenTag3D Dev Tools";
 			};
 			name = Release;
 		};
@@ -516,7 +517,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				TEST_TARGET_NAME = OpenTag3D;
 			};
 			name = Debug;
@@ -532,7 +533,7 @@
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SWIFT_EMIT_LOC_STRINGS = NO;
 				SWIFT_VERSION = 5.0;
-				TARGETED_DEVICE_FAMILY = "1,2";
+				TARGETED_DEVICE_FAMILY = 1;
 				TEST_TARGET_NAME = OpenTag3D;
 			};
 			name = Release;
@@ -540,7 +541,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		30DC3A9D3040674000C8356E /* Build configuration list for PBXProject "OpenTag3D" */ = {
+		30DC3A9D3040674000C8356E /* Build configuration list for PBXProject "OpenTag3D Dev Tools" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				30DC3AC13040674200C8356E /* Debug */,
@@ -549,7 +550,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		30DC3AC33040674200C8356E /* Build configuration list for PBXNativeTarget "OpenTag3D" */ = {
+		30DC3AC33040674200C8356E /* Build configuration list for PBXNativeTarget "OpenTag3D Dev Tools" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				30DC3AC43040674200C8356E /* Debug */,
@@ -558,7 +559,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		30DC3AC63040674200C8356E /* Build configuration list for PBXNativeTarget "OpenTag3DTests" */ = {
+		30DC3AC63040674200C8356E /* Build configuration list for PBXNativeTarget "OpenTag3D Dev ToolsTests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				30DC3AC73040674200C8356E /* Debug */,
@@ -567,7 +568,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		30DC3AC93040674200C8356E /* Build configuration list for PBXNativeTarget "OpenTag3DUITests" */ = {
+		30DC3AC93040674200C8356E /* Build configuration list for PBXNativeTarget "OpenTag3D Dev ToolsUITests" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				30DC3ACA3040674200C8356E /* Debug */,

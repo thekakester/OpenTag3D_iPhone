@@ -14,7 +14,7 @@ let package = Package(
         .target(
             name: "OpenTag3DKit",
             resources: [
-                .process("Resources")
+                .copy("Resources/Specifications")
             ]
         ),
         .testTarget(

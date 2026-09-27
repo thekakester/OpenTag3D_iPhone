@@ -17,6 +17,18 @@ import Foundation
 ///
 /// Reading the version does not load or parse a specification file.
 public enum OpenTag3DHeader {
+    /// OpenTag3D reserves three decimal digits for the minor version.
+    public static func majorVersion(of version: UInt16) -> UInt16 {
+        version / 1_000
+    }
+
+    /// Formats the encoded integer form as a dotted OpenTag3D version.
+    public static func formattedVersion(_ version: UInt16) -> String {
+        let major = majorVersion(of: version)
+        let minor = version % 1_000
+        return "\(major).\(String(format: "%03d", Int(minor)))"
+    }
+
     /// Returns the integer version encoded in the first two bytes.
     /// For example, bytes `07 D3` return `2003`.
     public static func version(from data: Data) throws -> UInt16 {

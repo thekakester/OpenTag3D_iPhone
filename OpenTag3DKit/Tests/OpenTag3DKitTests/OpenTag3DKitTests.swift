@@ -8,6 +8,31 @@ struct OpenTag3DKitTests {
         #expect(try OpenTag3DHeader.version(fromHex: "07 D3 FF FF") == 2003)
     }
 
+    @Test func discoversBundledSpecificationsInVersionOrder() {
+        #expect(OpenTag3DBundledSpecifications.supportedVersions == [2000, 2003])
+    }
+
+    @Test func selectsPreviousMinorVersionButNeverPreviousMajorVersion() throws {
+        #expect(try OpenTag3DBundledSpecifications.specificationVersion(for: 2000) == 2000)
+        #expect(try OpenTag3DBundledSpecifications.specificationVersion(for: 2002) == 2000)
+        #expect(try OpenTag3DBundledSpecifications.specificationVersion(for: 2004) == 2003)
+
+        #expect(throws: OpenTag3DError.unsupportedMajorVersion(3)) {
+            try OpenTag3DBundledSpecifications.specificationVersion(for: 3001)
+        }
+    }
+
+    @Test func compatibleParserRetainsTagAndSpecificationVersions() throws {
+        let parser = try OpenTag3DParser(
+            bundledVersion: 2000,
+            acceptingPayloadVersion: 2002
+        )
+        let tag = try parser.parse(Data([0x07, 0xD2]))
+
+        #expect(tag.reportedVersion == 2002)
+        #expect(tag.specificationVersion == 2000)
+    }
+
     @Test func parsesDefaultSpecification() throws {
         var payload = Data(repeating: 0, count: 0xD8)
         payload[0] = 0x07

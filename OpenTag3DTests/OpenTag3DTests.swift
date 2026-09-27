@@ -8,9 +8,25 @@
 import Foundation
 import OpenTag3DKit
 import Testing
-@testable import OpenTag3D
+@testable import OpenTag3D_Dev_Tools
 
 struct OpenTag3DTests {
+    @Test func fallsBackWithinMajorVersionAndReturnsWarning() throws {
+        let payload = Data([0x07, 0xD2])
+        let plan = try TagPayloadEditor.decodingPlan(for: payload)
+        let tag = try plan.parser.parse(payload)
+
+        #expect(tag.reportedVersion == 2002)
+        #expect(tag.specificationVersion == 2000)
+        #expect(plan.warning == "Tag version 2.002 not supported. Decoding as v2.000.")
+    }
+
+    @Test func rejectsUnsupportedMajorVersion() {
+        #expect(throws: OpenTag3DError.unsupportedMajorVersion(3)) {
+            try TagPayloadEditor.decodingPlan(for: Data([0x0B, 0xB9]))
+        }
+    }
+
     @Test func appUsesVersionedLibrarySpecification() throws {
         var payload = Data(repeating: 0, count: 0xD8)
         payload[0] = 0x07

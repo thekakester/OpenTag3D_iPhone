@@ -21,6 +21,7 @@ import Foundation
 /// other source.
 public struct OpenTag3DParser: Sendable {
     private let specification: OpenTag3DSpecification
+    private let acceptedPayloadVersion: UInt16?
 
     /// Creates a parser using the current specification bundled with OpenTag3DKit.
     public init() throws {
@@ -29,19 +30,34 @@ public struct OpenTag3DParser: Sendable {
 
     /// Creates a parser using a versioned specification bundled with OpenTag3DKit.
     /// For example, version `2003` loads `spec-2003.json`.
-    public init(bundledVersion: UInt16) throws {
+    /// `acceptingPayloadVersion` explicitly permits a compatible payload to be
+    /// decoded with that specification while preserving both version values.
+    public init(
+        bundledVersion: UInt16,
+        acceptingPayloadVersion: UInt16? = nil
+    ) throws {
         guard let url = Bundle.module.url(
             forResource: "spec-\(bundledVersion)",
-            withExtension: "json"
+            withExtension: "json",
+            subdirectory: "Specifications"
         ) else {
             throw OpenTag3DError.missingDefaultSpecification
         }
-        try self.init(specificationJSON: Data(contentsOf: url))
+        try self.init(
+            specificationJSON: Data(contentsOf: url),
+            acceptingPayloadVersion: acceptingPayloadVersion
+        )
     }
 
     /// Creates a parser using a caller-supplied OpenTag3D specification.
     public init(specificationJSON: Data) throws {
         specification = try OpenTag3DSpecification.decode(specificationJSON)
+        acceptedPayloadVersion = nil
+    }
+
+    private init(specificationJSON: Data, acceptingPayloadVersion: UInt16?) throws {
+        specification = try OpenTag3DSpecification.decode(specificationJSON)
+        acceptedPayloadVersion = acceptingPayloadVersion
     }
 
     /// Creates a parser using an OpenTag3D specification file.
@@ -51,13 +67,15 @@ public struct OpenTag3DParser: Sendable {
 
     /// Parses a binary OpenTag3D payload.
     ///
-    /// The first two bytes must match the parser's specification version.
+    /// The first two bytes must match the parser's specification version or
+    /// the explicitly accepted compatible payload version.
     /// Missing trailing bytes are interpreted as zero as required by the
     /// OpenTag3D reader guidelines. `OpenTag3DTag.data` still contains the
     /// original, unpadded payload.
     public func parse(_ data: Data) throws -> OpenTag3DTag {
         let reportedVersion = try OpenTag3DHeader.version(from: data)
-        guard reportedVersion == specification.version else {
+        guard reportedVersion == specification.version
+                || reportedVersion == acceptedPayloadVersion else {
             throw OpenTag3DError.versionMismatch(
                 payload: reportedVersion,
                 specification: specification.version

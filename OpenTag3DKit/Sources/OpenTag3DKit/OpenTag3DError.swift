@@ -8,6 +8,8 @@ public enum OpenTag3DError: Error, Equatable, LocalizedError, Sendable {
     case missingDefaultSpecification
     case invalidSpecification(String)
     case unsupportedFieldType(String)
+    case unsupportedMajorVersion(UInt16)
+    case unsupportedVersion(UInt16)
     case versionMismatch(payload: UInt16, specification: UInt16)
     case invalidText(fieldID: String, encoding: String)
 
@@ -25,6 +27,10 @@ public enum OpenTag3DError: Error, Equatable, LocalizedError, Sendable {
             return "The OpenTag3D specification is invalid: \(reason)"
         case .unsupportedFieldType(let type):
             return "The OpenTag3D field type ‘\(type)’ is not supported."
+        case .unsupportedMajorVersion(let majorVersion):
+            return "Version \(majorVersion).XXX tags not supported."
+        case .unsupportedVersion(let version):
+            return "Tag version \(OpenTag3DHeader.formattedVersion(version)) not supported."
         case .versionMismatch(let payload, let specification):
             return "Payload version \(payload) does not match specification version \(specification)."
         case .invalidText(let fieldID, let encoding):

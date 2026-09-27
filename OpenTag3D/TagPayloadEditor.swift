@@ -48,8 +48,53 @@ enum TagPayloadError: LocalizedError {
 /// App-only editing and formatting around the portable OpenTag3DKit parser.
 enum TagPayloadEditor {
     static func parser(for payload: Data) throws -> OpenTag3DParser {
-        let version = try OpenTag3DHeader.version(from: payload)
-        return try OpenTag3DParser(bundledVersion: version)
+        try decodingPlan(for: payload).parser
+    }
+
+    struct DecodingPlan {
+        let parser: OpenTag3DParser
+        let warning: String?
+    }
+
+    /// Creates the parser and optional compatibility warning for a payload.
+    ///
+    /// The payload's first two bytes identify its OpenTag3D version. When an
+    /// exact bundled specification exists, the plan uses it without a warning.
+    /// Otherwise, the plan uses the newest earlier specification in the same
+    /// major-version family and returns a warning describing the fallback.
+    /// Versions never fall back across a major-version boundary because a new
+    /// major version may contain breaking format changes.
+    ///
+    /// For example, with bundled specifications `2.000` and `2.003`, a `2.002`
+    /// payload is decoded as `2.000`. A `3.001` payload is rejected rather than
+    /// being decoded as `2.003`.
+    ///
+    /// - Parameter payload: Raw bytes from an `application/opentag3d` record.
+    /// - Returns: A parser configured for the selected specification and a
+    ///   warning when the selected specification differs from the tag version.
+    /// - Throws: `OpenTag3DError.payloadTooShort` when the version header is
+    ///   incomplete, `OpenTag3DError.unsupportedMajorVersion` when no bundled
+    ///   specification supports the tag's major version, or
+    ///   `OpenTag3DError.unsupportedVersion` when that major version is known
+    ///   but has no specification at or before the tag version.
+    static func decodingPlan(for payload: Data) throws -> DecodingPlan {
+        let tagVersion = try OpenTag3DHeader.version(from: payload)
+        let specificationVersion = try OpenTag3DBundledSpecifications.specificationVersion(
+            for: tagVersion
+        )
+        let parser = try OpenTag3DParser(
+            bundledVersion: specificationVersion,
+            acceptingPayloadVersion: tagVersion
+        )
+
+        let warning: String?
+        if tagVersion == specificationVersion {
+            warning = nil
+        } else {
+            warning = "Tag version \(OpenTag3DHeader.formattedVersion(tagVersion)) not supported. "
+                + "Decoding as v\(OpenTag3DHeader.formattedVersion(specificationVersion))."
+        }
+        return DecodingPlan(parser: parser, warning: warning)
     }
 
     static func data(from hexText: String) throws -> Data {

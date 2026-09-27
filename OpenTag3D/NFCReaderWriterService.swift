@@ -86,8 +86,9 @@ final class NFCReaderWriterService: NSObject, ObservableObject {
         rawHexText = newValue
 
         do {
-            let payload = try refreshDecodedFieldsFromRawHex()
-            statusMessage = "Decoded \(payload.count) edited payload bytes."
+            let result = try refreshDecodedFieldsFromRawHex()
+            statusMessage = result.warning
+                ?? "Decoded \(result.payload.count) edited payload bytes."
         } catch {
             fields = []
             statusMessage = "Hex edit error: \(error.localizedDescription)"
@@ -115,19 +116,20 @@ final class NFCReaderWriterService: NSObject, ObservableObject {
 
     /// Rebuilds every displayed field from the current editable hex text.
     @discardableResult
-    private func refreshDecodedFieldsFromRawHex() throws -> Data {
+    private func refreshDecodedFieldsFromRawHex() throws -> (payload: Data, warning: String?) {
         let payload = try TagPayloadEditor.data(from: rawHexText)
-        let parser = try TagPayloadEditor.parser(for: payload)
-        fields = try parser.parse(payload).fields
-        return payload
+        let plan = try TagPayloadEditor.decodingPlan(for: payload)
+        fields = try plan.parser.parse(payload).fields
+        return (payload, plan.warning)
     }
 
     private func finishReading(payload: Data) {
         rawHexText = TagPayloadEditor.editableHex(for: payload)
 
         do {
-            try refreshDecodedFieldsFromRawHex()
-            statusMessage = "Read an OpenTag3D payload from the NFC tag (\(payload.count) bytes)."
+            let result = try refreshDecodedFieldsFromRawHex()
+            statusMessage = result.warning
+                ?? "Read an OpenTag3D payload from the NFC tag (\(payload.count) bytes)."
         } catch {
             fields = []
             statusMessage = "The tag was read, but its payload could not be decoded: \(error.localizedDescription)"
