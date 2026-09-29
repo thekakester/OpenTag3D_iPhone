@@ -48,18 +48,7 @@ private struct DevToolsView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
                     VStack(spacing: 8) {
-                        Button {
-                            tagReader.beginReading()
-                        } label: {
-                            Label(
-                                tagReader.isReading ? "Reading…" : "Read Tag",
-                                systemImage: "wave.3.right"
-                            )
-                            .font(.subheadline)
-                            .frame(maxWidth: .infinity)
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .disabled(tagReader.isBusy)
+                        readTagButton
 
                         Menu {
                             Button {
@@ -107,7 +96,8 @@ private struct DevToolsView: View {
                         ),
                         focusedEditor: $focusedEditor,
                         isWriting: tagReader.isWriting,
-                        isScanning: tagReader.isBusy
+                        isScanning: tagReader.isBusy,
+                        hasPayload: tagReader.hasParsedPayload
                     ) {
                         focusedEditor = nil
                         tagReader.beginWriting()
@@ -187,6 +177,46 @@ private struct DevToolsView: View {
             }
         }
     }
+
+    @ViewBuilder
+    private var readTagButton: some View {
+        if tagReader.hasParsedPayload {
+            Button {
+                tagReader.beginReading()
+            } label: {
+                readTagLabel
+                    .padding(.vertical, 10)
+                    .foregroundStyle(.blue)
+                    .background(
+                        Color.white,
+                        in: RoundedRectangle(cornerRadius: 8)
+                    )
+                    .overlay {
+                        RoundedRectangle(cornerRadius: 8)
+                            .stroke(Color.blue.opacity(0.45), lineWidth: 1)
+                    }
+            }
+            .buttonStyle(.plain)
+            .disabled(tagReader.isBusy)
+        } else {
+            Button {
+                tagReader.beginReading()
+            } label: {
+                readTagLabel
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(tagReader.isBusy)
+        }
+    }
+
+    private var readTagLabel: some View {
+        Label(
+            tagReader.isReading ? "Reading…" : "Read Tag",
+            systemImage: "wave.3.right"
+        )
+        .font(.subheadline)
+        .frame(maxWidth: .infinity)
+    }
 }
 
 private struct EditableHexSection: View {
@@ -194,12 +224,24 @@ private struct EditableHexSection: View {
     let focusedEditor: FocusState<EditorFocus?>.Binding
     let isWriting: Bool
     let isScanning: Bool
+    let hasPayload: Bool
     let onWrite: () -> Void
 
     var body: some View {
         VStack(alignment: .leading, spacing: 8) {
-            Text("application/opentag3d payload")
-                .font(.subheadline.weight(.semibold))
+            HStack {
+                Text("application/opentag3d payload")
+                    .font(.subheadline.weight(.semibold))
+
+                Button("clear") {
+                    value = ""
+                }
+                .font(.subheadline)
+                .foregroundStyle(.blue)
+                .buttonStyle(.plain)
+
+                Spacer()
+            }
 
             TextEditor(text: $value)
                 .font(.system(size: 10, design: .monospaced))
@@ -211,20 +253,34 @@ private struct EditableHexSection: View {
                 .padding(8)
                 .background(.quaternary, in: RoundedRectangle(cornerRadius: 10))
 
-            Button {
-                onWrite()
-            } label: {
-                Label(isWriting ? "Writing…" : "Write Tag", systemImage: "wave.3.right")
-                    .font(.subheadline)
-                    .frame(maxWidth: .infinity)
+            if hasPayload {
+                Button {
+                    onWrite()
+                } label: {
+                    writeTagLabel
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(isScanning)
+            } else {
+                Button {
+                    onWrite()
+                } label: {
+                    writeTagLabel
+                }
+                .buttonStyle(.bordered)
+                .disabled(isScanning)
             }
-            .buttonStyle(.bordered)
-            .disabled(isScanning)
 
             Text("Editable hexadecimal payload bytes. Offsets below start at the first byte shown here.")
                 .font(.caption)
                 .foregroundStyle(.secondary)
         }
+    }
+
+    private var writeTagLabel: some View {
+        Label(isWriting ? "Writing…" : "Write Tag", systemImage: "wave.3.right")
+            .font(.subheadline)
+            .frame(maxWidth: .infinity)
     }
 }
 

@@ -67,6 +67,10 @@ final class NFCReaderWriterService: NSObject, ObservableObject {
         isScanning || isImporting
     }
 
+    var hasParsedPayload: Bool {
+        fields.isEmpty == false
+    }
+
     static func normalizedSerialNumber(_ serialNumber: String) -> String {
         serialNumber
             .trimmingCharacters(in: .whitespacesAndNewlines)

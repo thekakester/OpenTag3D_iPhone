@@ -82,6 +82,26 @@ struct OpenTag3DTests {
         #expect(tag["target_vso"]?.offset == 0x97)
     }
 
+    @Test func parsedPayloadStateTracksPastedHex() {
+        let service = NFCReaderWriterService()
+        var payload = Data(repeating: 0, count: 0xD8)
+        payload[0] = 0x07
+        payload[1] = 0xD3
+
+        #expect(service.hasParsedPayload == false)
+
+        service.updateRawHexText(TagPayloadEditor.editableHex(for: payload))
+        #expect(service.hasParsedPayload)
+
+        service.updateRawHexText("")
+        #expect(service.rawHexText.isEmpty)
+        #expect(service.fields.isEmpty)
+        #expect(service.hasParsedPayload == false)
+
+        service.updateRawHexText("not hex")
+        #expect(service.hasParsedPayload == false)
+    }
+
     @Test func editableHexRoundTripsThroughLibrary() throws {
         var payload = Data(repeating: 0, count: 0xD8)
         payload[0] = 0x07
