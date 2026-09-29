@@ -5,7 +5,9 @@
 //  Created by Mitch Davis (With AI Assistance) on 8/27/26.
 //
 
+import Foundation
 import SwiftUI
+import UIKit
 import OpenTag3DKit
 
 private enum FieldInput: Hashable {
@@ -86,6 +88,8 @@ private struct DevToolsView: View {
                         focusedEditor = nil
                         tagReader.beginWriting()
                     }
+
+                    ProductSummaryView(fields: tagReader.fields)
 
                     if tagReader.productPhotoURLs.isEmpty == false {
                         ProductPhotoStrip(urls: tagReader.productPhotoURLs)
@@ -331,6 +335,200 @@ private struct ProductPhotoThumbnail: View {
     }
 }
 
+private struct ProductSummaryView: View {
+    let fields: [OpenTag3DField]
+
+    var body: some View {
+        if hasContent {
+            VStack(alignment: .leading, spacing: 6) {
+                if let manufacturer {
+                    Text(manufacturer)
+                        .font(.title3.weight(.semibold))
+                }
+
+                if colorName != nil || materialDescription != nil {
+                    HStack(alignment: .firstTextBaseline, spacing: 6) {
+                        if let colorName {
+                            if let primaryColor {
+                                Text(colorName)
+                                    .font(.headline)
+                                    .foregroundStyle(primaryColor.foregroundColor)
+                                    .padding(.horizontal, 8)
+                                    .padding(.vertical, 4)
+                                    .background(
+                                        primaryColor.backgroundColor,
+                                        in: RoundedRectangle(cornerRadius: 6)
+                                    )
+                            } else {
+                                Text(colorName)
+                                    .font(.headline)
+                            }
+                        }
+
+                        if let materialDescription {
+                            Text(materialDescription)
+                                .font(.headline)
+                        }
+                    }
+                }
+
+                if diameterDescription != nil || weightDescription != nil {
+                    Text([diameterDescription, weightDescription].compactMap { $0 }.joined(separator: " "))
+                        .font(.subheadline)
+                }
+
+                if let serialNumber {
+                    Text("#\(serialNumber)")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+        }
+    }
+
+    private var hasContent: Bool {
+        manufacturer != nil
+            || colorName != nil
+            || materialDescription != nil
+            || diameterDescription != nil
+            || weightDescription != nil
+            || serialNumber != nil
+    }
+
+    private var manufacturer: String? {
+        textValue(for: "manufacturer")
+    }
+
+    private var colorName: String? {
+        textValue(for: "color_name")
+    }
+
+    private var materialDescription: String? {
+        [textValue(for: "material"), textValue(for: "material_mod")]
+            .compactMap { $0 }
+            .joined(separator: " ")
+            .nilIfEmpty
+    }
+
+    private var diameterDescription: String? {
+        guard let field = field(withID: "diameter") else {
+            return nil
+        }
+
+        switch field.value {
+        case .number(let diameter):
+            return "\(decimalString(diameter))mm"
+        case .integer(let diameter):
+            return "\(diameter)mm"
+        default:
+            return nil
+        }
+    }
+
+    private var weightDescription: String? {
+        guard let field = field(withID: "weight"),
+              case .integer(let grams) = field.value else {
+            return nil
+        }
+
+        if grams >= 1_000 {
+            let kilograms = NSDecimalNumber(value: grams)
+                .dividing(by: NSDecimalNumber(value: 1_000))
+            return "\(kilograms.stringValue)kg"
+        }
+
+        return "\(grams)g"
+    }
+
+    private var serialNumber: String? {
+        textValue(for: "serial")
+    }
+
+    private var primaryColor: ProductSummaryColor? {
+        guard let field = field(withID: "color_1"),
+              case .color(let red, let green, let blue, let alpha) = field.value else {
+            return nil
+        }
+
+        let backgroundColor = Color(
+            red: Double(red) / 255,
+            green: Double(green) / 255,
+            blue: Double(blue) / 255,
+            opacity: alpha == 0 ? 0 : 1
+        )
+        let foregroundColor: Color = alpha == 0
+            ? .primary
+            : (isDarkColor(hex: field.hex) ? .white : .black)
+
+        return ProductSummaryColor(
+            backgroundColor: backgroundColor,
+            foregroundColor: foregroundColor
+        )
+    }
+
+    private func field(withID id: String) -> OpenTag3DField? {
+        fields.first { $0.id == id }
+    }
+
+    private func textValue(for id: String) -> String? {
+        guard let field = field(withID: id),
+              case .text(let value) = field.value else {
+            return nil
+        }
+
+        return value.trimmingCharacters(in: .whitespacesAndNewlines).nilIfEmpty
+    }
+
+    private func decimalString(_ value: Decimal) -> String {
+        NSDecimalNumber(decimal: value).stringValue
+    }
+}
+
+private struct ProductSummaryColor {
+    let backgroundColor: Color
+    let foregroundColor: Color
+}
+
+private func isDarkColor(hex: String) -> Bool {
+    let normalizedHex = hex
+        .trimmingCharacters(in: .whitespacesAndNewlines)
+        .trimmingCharacters(in: CharacterSet(charactersIn: "#"))
+
+    guard normalizedHex.count >= 6 else {
+        return false
+    }
+
+    let redHex = String(normalizedHex.prefix(2))
+    let greenHex = String(normalizedHex.dropFirst(2).prefix(2))
+    let blueHex = String(normalizedHex.dropFirst(4).prefix(2))
+    guard let red = UInt8(redHex, radix: 16),
+          let green = UInt8(greenHex, radix: 16),
+          let blue = UInt8(blueHex, radix: 16) else {
+        return false
+    }
+
+    func linearized(_ component: UInt8) -> Double {
+        let value = Double(component) / 255
+        return value <= 0.04045
+            ? value / 12.92
+            : pow((value + 0.055) / 1.055, 2.4)
+    }
+
+    let luminance = 0.2126 * linearized(red)
+        + 0.7152 * linearized(green)
+        + 0.0722 * linearized(blue)
+    let whiteContrast = 1.05 / (luminance + 0.05)
+    let blackContrast = (luminance + 0.05) / 0.05
+    return whiteContrast > blackContrast
+}
+
+private extension String {
+    var nilIfEmpty: String? {
+        isEmpty ? nil : self
+    }
+}
+
 private struct EditableHexSection: View {
     @Binding var value: String
     let focusedEditor: FocusState<EditorFocus?>.Binding
@@ -421,14 +619,27 @@ private struct SummaryFieldRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
 
-            TextField("Human readable value", text: $humanText)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.black)
-                .focused(focusedEditor, equals: .field(id: field.id, input: .human))
-                .onSubmit { commit() }
-                .accessibilityLabel("\(field.name) human readable value")
-                .humanFieldStyle()
-                .frame(maxWidth: .infinity, alignment: .leading)
+            HStack(spacing: 6) {
+                if field.type == .rgba {
+                    ColorFieldPicker(field: field) { hex in
+                        onCommit(field.id, hex)
+                    }
+                } else {
+                    FieldColorSwatch(field: field)
+                        .opacity(0)
+                        .allowsHitTesting(false)
+                        .accessibilityHidden(true)
+                }
+
+                TextField("Human readable value", text: $humanText)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.black)
+                    .focused(focusedEditor, equals: .field(id: field.id, input: .human))
+                    .onSubmit { commit() }
+                    .accessibilityLabel("\(field.name) human readable value")
+                    .humanFieldStyle()
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .onChange(of: focusedEditor.wrappedValue) { oldValue, newValue in
@@ -483,13 +694,21 @@ private struct FieldBubble: View {
                     .lineLimit(1)
             }
 
-            TextField("Human readable value", text: $humanText)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundStyle(.black)
-                .focused(focusedEditor, equals: focus(for: .human))
-                .onSubmit { commit(.human) }
-                .accessibilityLabel("\(field.name) human readable value")
-                .humanFieldStyle()
+            HStack(spacing: 6) {
+                if field.type == .rgba {
+                    ColorFieldPicker(field: field) { hex in
+                        onCommit(field.id, .humanReadable, hex)
+                    }
+                }
+
+                TextField("Human readable value", text: $humanText)
+                    .font(.system(size: 13, weight: .medium))
+                    .foregroundStyle(.black)
+                    .focused(focusedEditor, equals: focus(for: .human))
+                    .onSubmit { commit(.human) }
+                    .accessibilityLabel("\(field.name) human readable value")
+                    .humanFieldStyle()
+            }
 
             HStack(spacing: 8) {
                 if field.numericText != "—" {
@@ -551,6 +770,166 @@ private struct FieldBubble: View {
             onCommit(field.id, .numeric, numericText)
         case .rawHex:
             onCommit(field.id, .rawHex, rawHexText)
+        }
+    }
+}
+
+private struct FieldColorSwatch: View {
+    let field: OpenTag3DField
+
+    private let size: CGFloat = 24
+
+    var body: some View {
+        RoundedRectangle(cornerRadius: 6)
+            .fill(displayColor)
+            .frame(width: size, height: size)
+            .overlay {
+                RoundedRectangle(cornerRadius: 6)
+                    .stroke(Color.secondary.opacity(0.35), lineWidth: 1)
+            }
+    }
+
+    private var displayColor: Color {
+        guard case .color(let red, let green, let blue, let alpha) = field.value else {
+            return .clear
+        }
+
+        return Color(
+            red: Double(red) / 255,
+            green: Double(green) / 255,
+            blue: Double(blue) / 255,
+            opacity: Double(alpha) / 255
+        )
+    }
+}
+
+private struct ColorFieldPicker: View {
+    let field: OpenTag3DField
+    let onSelection: (String) -> Void
+
+    @State private var selectedColor: UIColor
+    @State private var isPresentingPicker = false
+
+    init(field: OpenTag3DField, onSelection: @escaping (String) -> Void) {
+        self.field = field
+        self.onSelection = onSelection
+        _selectedColor = State(initialValue: Self.uiColor(for: field))
+    }
+
+    var body: some View {
+        Button {
+            isPresentingPicker = true
+        } label: {
+            FieldColorSwatch(field: field)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Choose \(field.name)")
+        .sheet(isPresented: $isPresentingPicker) {
+            SystemColorPicker(
+                selectedColor: $selectedColor,
+                isPresented: $isPresentingPicker
+            ) { color in
+                guard let hex = Self.rgbaHex(for: color) else { return }
+                onSelection(hex)
+            }
+        }
+        .onChange(of: field.hex) { _, _ in
+            selectedColor = Self.uiColor(for: field)
+        }
+    }
+
+    private static func uiColor(for field: OpenTag3DField) -> UIColor {
+        guard case .color(let red, let green, let blue, let alpha) = field.value else {
+            return .clear
+        }
+
+        return UIColor(
+            red: CGFloat(red) / 255,
+            green: CGFloat(green) / 255,
+            blue: CGFloat(blue) / 255,
+            alpha: CGFloat(alpha) / 255
+        )
+    }
+
+    private static func rgbaHex(for color: UIColor) -> String? {
+        var red: CGFloat = 0
+        var green: CGFloat = 0
+        var blue: CGFloat = 0
+        var alpha: CGFloat = 0
+        guard color.getRed(&red, green: &green, blue: &blue, alpha: &alpha) else {
+            return nil
+        }
+
+        func byte(_ component: CGFloat) -> UInt8 {
+            UInt8((min(max(component, 0), 1) * 255).rounded())
+        }
+
+        return String(
+            format: "%02X%02X%02X%02X",
+            byte(red),
+            byte(green),
+            byte(blue),
+            byte(alpha)
+        )
+    }
+}
+
+private struct SystemColorPicker: UIViewControllerRepresentable {
+    @Binding var selectedColor: UIColor
+    @Binding var isPresented: Bool
+    let onSelection: (UIColor) -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(
+            selectedColor: $selectedColor,
+            isPresented: $isPresented,
+            onSelection: onSelection
+        )
+    }
+
+    func makeUIViewController(context: Context) -> UIColorPickerViewController {
+        let picker = UIColorPickerViewController()
+        picker.selectedColor = selectedColor
+        picker.supportsAlpha = true
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(
+        _ picker: UIColorPickerViewController,
+        context: Context
+    ) {
+        if picker.selectedColor != selectedColor {
+            picker.selectedColor = selectedColor
+        }
+    }
+
+    final class Coordinator: NSObject, UIColorPickerViewControllerDelegate {
+        private var selectedColor: Binding<UIColor>
+        private var isPresented: Binding<Bool>
+        private let onSelection: (UIColor) -> Void
+
+        init(
+            selectedColor: Binding<UIColor>,
+            isPresented: Binding<Bool>,
+            onSelection: @escaping (UIColor) -> Void
+        ) {
+            self.selectedColor = selectedColor
+            self.isPresented = isPresented
+            self.onSelection = onSelection
+        }
+
+        func colorPickerViewControllerDidSelectColor(
+            _ viewController: UIColorPickerViewController
+        ) {
+            selectedColor.wrappedValue = viewController.selectedColor
+            onSelection(viewController.selectedColor)
+        }
+
+        func colorPickerViewControllerDidFinish(
+            _ viewController: UIColorPickerViewController
+        ) {
+            isPresented.wrappedValue = false
         }
     }
 }
