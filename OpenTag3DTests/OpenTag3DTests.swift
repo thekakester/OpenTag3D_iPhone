@@ -24,6 +24,32 @@ struct OpenTag3DTests {
         )
     }
 
+    @Test func normalizesOnlineDataURL() {
+        #expect(
+            NFCReaderWriterService.onlineDataURL(from: "pfil.us?i=56719-DUP3")?.absoluteString
+                == "https://pfil.us?i=56719-DUP3"
+        )
+        #expect(NFCReaderWriterService.onlineDataURL(from: "") == nil)
+    }
+
+    @Test func extractsProductPhotoURLs() {
+        let response = Data(
+            #"{"product_photos":["https://example.com/one.png","invalid","ftp://example.com/two.png","https://example.com/two.png","https://example.com/three.png","https://example.com/four.png","https://example.com/five.png","https://example.com/six.png"]}"#.utf8
+        )
+
+        #expect(
+            NFCReaderWriterService.productPhotoURLs(from: response)
+                == [
+                    URL(string: "https://example.com/one.png")!,
+                    URL(string: "https://example.com/two.png")!,
+                    URL(string: "https://example.com/three.png")!,
+                    URL(string: "https://example.com/four.png")!,
+                    URL(string: "https://example.com/five.png")!
+                ]
+        )
+        #expect(NFCReaderWriterService.productPhotoURLs(from: Data(#"{}"#.utf8)).isEmpty)
+    }
+
     @Test func extractsSerialNumberFromSupportedQRCodes() throws {
         #expect(
             try NFCReaderWriterService.serialNumber(fromQRCode: "3dqr.co?i=50017-fyg5")

@@ -103,6 +103,10 @@ private struct DevToolsView: View {
                         tagReader.beginWriting()
                     }
 
+                    if tagReader.productPhotoURLs.isEmpty == false {
+                        ProductPhotoStrip(urls: tagReader.productPhotoURLs)
+                    }
+
                     ForEach(tagReader.fields) { field in
                         FieldBubble(
                             field: field,
@@ -114,8 +118,6 @@ private struct DevToolsView: View {
                 }
                 .padding()
             }
-            .navigationTitle("OpenTag3D")
-            .navigationBarTitleDisplayMode(.inline)
         }
         .safeAreaInset(edge: .bottom, spacing: 0) {
             if focusedEditor != nil {
@@ -216,6 +218,65 @@ private struct DevToolsView: View {
         )
         .font(.subheadline)
         .frame(maxWidth: .infinity)
+    }
+}
+
+private struct ProductPhotoStrip: View {
+    let urls: [URL]
+
+    private let imageSize: CGFloat = 88
+
+    var body: some View {
+        ScrollView(.horizontal, showsIndicators: false) {
+            LazyHStack(spacing: 10) {
+                ForEach(urls, id: \.absoluteString) { url in
+                    ProductPhotoThumbnail(url: url, imageSize: imageSize)
+                }
+            }
+        }
+        .frame(height: imageSize)
+        .accessibilityLabel("Product photos")
+    }
+}
+
+private struct ProductPhotoThumbnail: View {
+    let url: URL
+    let imageSize: CGFloat
+
+    var body: some View {
+        AsyncImage(url: url) { phase in
+            switch phase {
+            case .empty:
+                ProgressView()
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.quaternary)
+                    .onAppear {
+                        print("[ProductPhotos] Thumbnail request started: \(url.absoluteString)")
+                    }
+            case .success(let image):
+                image
+                    .resizable()
+                    .scaledToFill()
+                    .onAppear {
+                        print("[ProductPhotos] Thumbnail loaded: \(url.absoluteString)")
+                    }
+            case .failure(let error):
+                Image(systemName: "photo.badge.exclamationmark")
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                    .background(.quaternary)
+                    .onAppear {
+                        print(
+                            "[ProductPhotos] Thumbnail failed: \(url.absoluteString) — "
+                                + error.localizedDescription
+                        )
+                    }
+            @unknown default:
+                EmptyView()
+            }
+        }
+        .frame(width: imageSize, height: imageSize)
+        .clipShape(RoundedRectangle(cornerRadius: 10))
     }
 }
 

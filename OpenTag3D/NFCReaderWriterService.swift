@@ -48,14 +48,43 @@ final class NFCReaderWriterService: NSObject, ObservableObject {
         case write(Data)
     }
 
+    private enum ParsedOnlineDataURL: Equatable {
+        case notEvaluated
+        case none
+        case url(URL)
+
+        var debugDescription: String {
+            switch self {
+            case .notEvaluated:
+                return "not evaluated"
+            case .none:
+                return "no URL"
+            case .url(let url):
+                return url.absoluteString
+            }
+        }
+    }
+
+    private struct OnlineDataResponse: Decodable {
+        let productPhotos: [String]?
+
+        enum CodingKeys: String, CodingKey {
+            case productPhotos = "product_photos"
+        }
+    }
+
     @Published private(set) var isReading = false
     @Published private(set) var isWriting = false
     @Published private(set) var isImporting = false
     @Published private(set) var statusMessage = "Enter a hex payload or scan an OpenTag3D tag."
     @Published private(set) var rawHexText = "00 00 00 00"
+    @Published private(set) var productPhotoURLs: [URL] = []
     @Published private(set) var fields: [OpenTag3DField] = []
 
     private var readerSession: NFCNDEFReaderSession?
+    private var onlineDataTask: URLSessionDataTask?
+    private var onlineDataRetryWorkItem: DispatchWorkItem?
+    private var parsedOnlineDataURL: ParsedOnlineDataURL = .notEvaluated
     private var didFinishCurrentScan = false
     private var operation: Operation = .read
 
@@ -85,6 +114,39 @@ final class NFCReaderWriterService: NSObject, ObservableObject {
             URLQueryItem(name: "format", value: "hex")
         ]
         return components?.url
+    }
+
+    static func onlineDataURL(from text: String) -> URL? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard trimmed.isEmpty == false else { return nil }
+
+        let urlText = "https://\(trimmed)"
+        guard let url = URL(string: urlText),
+              let scheme = url.scheme?.lowercased(),
+              scheme == "https",
+              url.host != nil else {
+            return nil
+        }
+        return url
+    }
+
+    static func productPhotoURLs(from data: Data) -> [URL] {
+        guard let response = try? JSONDecoder().decode(OnlineDataResponse.self, from: data) else {
+            return []
+        }
+        return validProductPhotoURLs(from: response.productPhotos ?? [])
+    }
+
+    private static func validProductPhotoURLs(from photoURLTexts: [String]) -> [URL] {
+        photoURLTexts.compactMap { photoURLText in
+            guard let url = URL(string: photoURLText),
+                  let scheme = url.scheme?.lowercased(),
+                  scheme == "https" || scheme == "http",
+                  url.host != nil else {
+                return nil
+            }
+            return url
+        }.prefix(5).map { $0 }
     }
 
     /// Extracts and normalizes a serial number from a supported OpenTag3D QR URL.
@@ -205,6 +267,193 @@ final class NFCReaderWriterService: NSObject, ObservableObject {
         let warning: String?
     }
 
+    private func processOnlineDataURL(in parsedFields: [OpenTag3DField]) {
+        let dataURLText = parsedFields.first { $0.id == "data_url" }?.description ?? ""
+        print(
+            "[ProductPhotos] Parsed Online Data URL field: "
+                + (dataURLText.isEmpty ? "<null or empty>" : "\"\(dataURLText)\"")
+        )
+
+        let newState: ParsedOnlineDataURL
+        if let url = Self.onlineDataURL(from: dataURLText) {
+            newState = .url(url)
+        } else {
+            newState = .none
+        }
+        print("[ProductPhotos] Normalized URL state: \(newState.debugDescription)")
+
+        guard newState != parsedOnlineDataURL else {
+            print(
+                "[ProductPhotos] No reload: parsed URL state matches cached state "
+                    + "(\(parsedOnlineDataURL.debugDescription)). Keeping "
+                    + "\(productPhotoURLs.count) displayed photo(s)."
+            )
+            return
+        }
+
+        print(
+            "[ProductPhotos] URL state changed from \(parsedOnlineDataURL.debugDescription) "
+                + "to \(newState.debugDescription). Clearing displayed photos."
+        )
+
+        onlineDataTask?.cancel()
+        onlineDataTask = nil
+        onlineDataRetryWorkItem?.cancel()
+        onlineDataRetryWorkItem = nil
+        parsedOnlineDataURL = newState
+        productPhotoURLs = []
+
+        guard case .url(let newOnlineDataURL) = newState else {
+            print("[ProductPhotos] No lookup: the parsed payload has no usable Online Data URL.")
+            return
+        }
+
+        startOnlineDataLookup(at: newOnlineDataURL, attempt: 1)
+    }
+
+    private func startOnlineDataLookup(at onlineDataURL: URL, attempt: Int) {
+        var request = URLRequest(url: onlineDataURL)
+        request.setValue("application/json", forHTTPHeaderField: "Accept")
+        print(
+            "[ProductPhotos] Starting JSON lookup attempt \(attempt): "
+                + onlineDataURL.absoluteString
+        )
+        onlineDataTask = URLSession.shared.dataTask(with: request) { [weak self] data, response, error in
+            if let error {
+                print("[ProductPhotos] JSON lookup failed: \(error.localizedDescription)")
+                return
+            }
+
+            guard let httpResponse = response as? HTTPURLResponse else {
+                print("[ProductPhotos] JSON lookup failed: response was not HTTP.")
+                return
+            }
+            print(
+                "[ProductPhotos] JSON response: HTTP \(httpResponse.statusCode), final URL: "
+                    + "\(httpResponse.url?.absoluteString ?? "<unknown>"), content type: "
+                    + "\(httpResponse.value(forHTTPHeaderField: "Content-Type") ?? "<unknown>")"
+            )
+
+            guard (200...299).contains(httpResponse.statusCode) else {
+                let retryAfterHeader = httpResponse.value(forHTTPHeaderField: "Retry-After")
+                let retryDelay = retryAfterHeader.flatMap(TimeInterval.init)
+                    ?? Self.onlineDataRetryDelay(after: attempt)
+                let responsePreview = data.map {
+                    String(decoding: $0.prefix(300), as: UTF8.self)
+                } ?? "<empty>"
+                print(
+                    "[ProductPhotos] JSON lookup returned HTTP \(httpResponse.statusCode). "
+                        + "Retry-After: \(retryAfterHeader ?? "not supplied"). "
+                        + "Response: \(responsePreview)"
+                )
+                self?.scheduleOnlineDataRetry(
+                    at: onlineDataURL,
+                    nextAttempt: attempt + 1,
+                    after: retryDelay
+                )
+                return
+            }
+
+            guard let data else {
+                print("[ProductPhotos] JSON lookup failed: successful HTTP response had no data.")
+                return
+            }
+
+            let responseBody: OnlineDataResponse
+            do {
+                responseBody = try JSONDecoder().decode(OnlineDataResponse.self, from: data)
+            } catch {
+                let preview = String(decoding: data.prefix(300), as: UTF8.self)
+                print("[ProductPhotos] JSON parsing failed: \(error.localizedDescription)")
+                print("[ProductPhotos] Response preview: \(preview)")
+                return
+            }
+
+            let photoURLTexts = responseBody.productPhotos ?? []
+            print("[ProductPhotos] product_photos from JSON (\(photoURLTexts.count)): \(photoURLTexts)")
+            let photoURLs = Self.validProductPhotoURLs(from: photoURLTexts)
+            print(
+                "[ProductPhotos] Usable preview URLs after validation and 5-image limit "
+                    + "(\(photoURLs.count)): \(photoURLs.map(\.absoluteString))"
+            )
+
+            DispatchQueue.main.async { [weak self] in
+                guard let self else { return }
+                guard self.parsedOnlineDataURL == .url(onlineDataURL) else {
+                    print(
+                        "[ProductPhotos] Ignoring stale response for "
+                            + "\(onlineDataURL.absoluteString); cached state is now "
+                            + "\(self.parsedOnlineDataURL.debugDescription)."
+                    )
+                    return
+                }
+                self.productPhotoURLs = photoURLs
+                print("[ProductPhotos] Published \(photoURLs.count) photo URL(s) to the UI.")
+            }
+        }
+        onlineDataTask?.resume()
+    }
+
+    private static func onlineDataRetryDelay(after attempt: Int) -> TimeInterval {
+        1.1 * pow(2, Double(attempt - 1))
+    }
+
+    private func scheduleOnlineDataRetry(
+        at onlineDataURL: URL,
+        nextAttempt: Int,
+        after delay: TimeInterval
+    ) {
+        let maximumRetries = 3
+        let maximumAttempts = maximumRetries + 1
+        guard nextAttempt <= maximumAttempts else {
+            print(
+                "[ProductPhotos] Giving up after \(maximumRetries) retries "
+                    + "(\(maximumAttempts) total lookup attempts). "
+                    + "The URL remains cached, so payload edits will not cause more requests."
+            )
+            return
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let self,
+                  self.parsedOnlineDataURL == .url(onlineDataURL) else {
+                print("[ProductPhotos] Retry canceled because the cached Online Data URL changed.")
+                return
+            }
+
+            let retry = DispatchWorkItem { [weak self] in
+                guard let self,
+                      self.parsedOnlineDataURL == .url(onlineDataURL) else {
+                    print("[ProductPhotos] Scheduled retry skipped because the URL changed.")
+                    return
+                }
+                self.onlineDataRetryWorkItem = nil
+                self.startOnlineDataLookup(at: onlineDataURL, attempt: nextAttempt)
+            }
+            self.onlineDataRetryWorkItem?.cancel()
+            self.onlineDataRetryWorkItem = retry
+            print(
+                "[ProductPhotos] Scheduling lookup attempt \(nextAttempt) in "
+                    + "\(String(format: "%.1f", delay)) second(s)."
+            )
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay, execute: retry)
+        }
+    }
+
+    private func resetOnlineDataLookup() {
+        print(
+            "[ProductPhotos] Payload cleared. Resetting cached URL state from "
+                + "\(parsedOnlineDataURL.debugDescription) and removing "
+                + "\(productPhotoURLs.count) displayed photo(s)."
+        )
+        onlineDataTask?.cancel()
+        onlineDataTask = nil
+        onlineDataRetryWorkItem?.cancel()
+        onlineDataRetryWorkItem = nil
+        parsedOnlineDataURL = .notEvaluated
+        productPhotoURLs = []
+    }
+
     private func finishImport(
         result: Result<ImportedTag, Error>,
         serialNumber: String
@@ -217,6 +466,7 @@ final class NFCReaderWriterService: NSObject, ObservableObject {
             case .success(let importedTag):
                 self.rawHexText = TagPayloadEditor.editableHex(for: importedTag.payload)
                 self.fields = importedTag.fields
+                self.processOnlineDataURL(in: importedTag.fields)
                 self.statusMessage = importedTag.warning
                     ?? "Imported Polar Filament tag \(serialNumber) (\(importedTag.payload.count) bytes)."
             case .failure(let error):
@@ -280,6 +530,13 @@ final class NFCReaderWriterService: NSObject, ObservableObject {
     func updateRawHexText(_ newValue: String) {
         rawHexText = newValue
 
+        if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            fields = []
+            resetOnlineDataLookup()
+            statusMessage = "Enter a hex payload or scan an OpenTag3D tag."
+            return
+        }
+
         do {
             let result = try refreshDecodedFieldsFromRawHex()
             statusMessage = result.warning
@@ -315,6 +572,7 @@ final class NFCReaderWriterService: NSObject, ObservableObject {
         let payload = try TagPayloadEditor.data(from: rawHexText)
         let plan = try TagPayloadEditor.decodingPlan(for: payload)
         fields = try plan.parser.parse(payload).fields
+        processOnlineDataURL(in: fields)
         return (payload, plan.warning)
     }
 
