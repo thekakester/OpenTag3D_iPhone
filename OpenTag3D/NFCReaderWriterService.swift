@@ -547,6 +547,22 @@ final class NFCReaderWriterService: NSObject, ObservableObject {
         }
     }
 
+    /// Rebuilds every decoded field from the raw payload, which remains the
+    /// source of truth when the UI switches between display modes.
+    func rebuildFieldsFromPayload() {
+        guard rawHexText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty == false else {
+            fields = []
+            return
+        }
+
+        do {
+            try refreshDecodedFieldsFromRawHex()
+        } catch {
+            fields = []
+            statusMessage = "Payload render error: \(error.localizedDescription)"
+        }
+    }
+
     /// Encodes one bubble edit into the payload, then derives every display value again.
     func updateField(id: String, source: OpenTag3DEditSource, text: String) {
         do {

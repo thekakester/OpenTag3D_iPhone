@@ -19,6 +19,13 @@ private enum EditorFocus: Hashable {
     case field(id: String, input: FieldInput)
 }
 
+private enum PayloadDisplayMode: String, CaseIterable, Identifiable {
+    case summary = "Summary"
+    case developer = "Developer"
+
+    var id: Self { self }
+}
+
 struct ContentView: View {
     @State private var isShowingDevTools = false
 
@@ -41,49 +48,26 @@ private struct DevToolsView: View {
     @State private var isShowingSerialImport = false
     @State private var isShowingQRCodeScanner = false
     @State private var serialNumber = ""
+    @State private var payloadDisplayMode: PayloadDisplayMode = .summary
     @FocusState private var focusedEditor: EditorFocus?
 
     var body: some View {
         NavigationStack {
             ScrollView {
                 VStack(alignment: .leading, spacing: 20) {
-                    VStack(spacing: 8) {
-                        readTagButton
+                    GeometryReader { geometry in
+                        let spacing: CGFloat = 8
+                        let availableWidth = geometry.size.width - spacing
 
-                        Menu {
-                            Button {
-                                serialNumber = ""
-                                isShowingSerialImport = true
-                            } label: {
-                                Label("by Polar Filament Serial Number", systemImage: "number")
-                            }
+                        HStack(spacing: spacing) {
+                            readTagButton
+                                .frame(width: availableWidth * 2 / 3)
 
-                            Button {
-                                isShowingQRCodeScanner = true
-                            } label: {
-                                Label("by QR Code", systemImage: "qrcode.viewfinder")
-                            }
-                        } label: {
-                            Label(
-                                tagReader.isImporting ? "Importing…" : "Import Tag",
-                                systemImage: "square.and.arrow.down"
-                            )
-                                .font(.caption.weight(.medium))
-                                .frame(maxWidth: .infinity)
-                                .padding(.vertical, 10)
-                                .foregroundStyle(.blue)
-                                .background(
-                                    Color.white,
-                                    in: RoundedRectangle(cornerRadius: 8)
-                                )
-                                .overlay {
-                                    RoundedRectangle(cornerRadius: 8)
-                                        .stroke(Color.blue.opacity(0.45), lineWidth: 1)
-                                }
+                            importTagMenu
+                                .frame(width: availableWidth / 3)
                         }
-                        .buttonStyle(.plain)
-                        .disabled(tagReader.isBusy)
                     }
+                    .frame(height: topButtonHeight)
 
                     Text(tagReader.statusMessage)
                         .font(.caption)
@@ -107,12 +91,44 @@ private struct DevToolsView: View {
                         ProductPhotoStrip(urls: tagReader.productPhotoURLs)
                     }
 
-                    ForEach(tagReader.fields) { field in
-                        FieldBubble(
-                            field: field,
-                            focusedEditor: $focusedEditor
-                        ) { id, source, text in
-                            tagReader.updateField(id: id, source: source, text: text)
+                    if tagReader.fields.isEmpty == false {
+                        Picker("Payload display", selection: $payloadDisplayMode) {
+                            ForEach(PayloadDisplayMode.allCases) { mode in
+                                Text(mode.rawValue).tag(mode)
+                            }
+                        }
+                        .pickerStyle(.segmented)
+                        .onChange(of: payloadDisplayMode) { _, _ in
+                            focusedEditor = nil
+                            DispatchQueue.main.async {
+                                tagReader.rebuildFieldsFromPayload()
+                            }
+                        }
+                    }
+
+                    if payloadDisplayMode == .summary {
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(tagReader.fields) { field in
+                                SummaryFieldRow(
+                                    field: field,
+                                    focusedEditor: $focusedEditor
+                                ) { id, text in
+                                    tagReader.updateField(
+                                        id: id,
+                                        source: .humanReadable,
+                                        text: text
+                                    )
+                                }
+                            }
+                        }
+                    } else {
+                        ForEach(tagReader.fields) { field in
+                            FieldBubble(
+                                field: field,
+                                focusedEditor: $focusedEditor
+                            ) { id, source, text in
+                                tagReader.updateField(id: id, source: source, text: text)
+                            }
                         }
                     }
                 }
@@ -182,33 +198,26 @@ private struct DevToolsView: View {
 
     @ViewBuilder
     private var readTagButton: some View {
-        if tagReader.hasParsedPayload {
-            Button {
-                tagReader.beginReading()
-            } label: {
-                readTagLabel
-                    .padding(.vertical, 10)
-                    .foregroundStyle(.blue)
-                    .background(
-                        Color.white,
-                        in: RoundedRectangle(cornerRadius: 8)
-                    )
-                    .overlay {
+        Button {
+            tagReader.beginReading()
+        } label: {
+            readTagLabel
+                .foregroundStyle(tagReader.hasParsedPayload ? Color.blue : Color.white)
+                .frame(maxHeight: .infinity)
+                .background(
+                    tagReader.hasParsedPayload ? Color.white : Color.blue,
+                    in: RoundedRectangle(cornerRadius: 8)
+                )
+                .overlay {
+                    if tagReader.hasParsedPayload {
                         RoundedRectangle(cornerRadius: 8)
                             .stroke(Color.blue.opacity(0.45), lineWidth: 1)
                     }
-            }
-            .buttonStyle(.plain)
-            .disabled(tagReader.isBusy)
-        } else {
-            Button {
-                tagReader.beginReading()
-            } label: {
-                readTagLabel
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(tagReader.isBusy)
+                }
         }
+        .buttonStyle(.plain)
+        .disabled(tagReader.isBusy)
+        .opacity(tagReader.isBusy ? 0.5 : 1)
     }
 
     private var readTagLabel: some View {
@@ -218,6 +227,48 @@ private struct DevToolsView: View {
         )
         .font(.subheadline)
         .frame(maxWidth: .infinity)
+    }
+
+    private var importTagMenu: some View {
+        Menu {
+            Button {
+                serialNumber = ""
+                isShowingSerialImport = true
+            } label: {
+                Label("by Polar Filament Serial Number", systemImage: "number")
+            }
+
+            Button {
+                isShowingQRCodeScanner = true
+            } label: {
+                Label("by QR Code", systemImage: "qrcode.viewfinder")
+            }
+        } label: {
+            Label(
+                tagReader.isImporting ? "Importing…" : "Import Tag",
+                systemImage: "square.and.arrow.down"
+            )
+            .font(.caption.weight(.medium))
+            .lineLimit(1)
+            .minimumScaleFactor(0.75)
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+            .foregroundStyle(.blue)
+            .background(
+                Color.white,
+                in: RoundedRectangle(cornerRadius: 8)
+            )
+            .overlay {
+                RoundedRectangle(cornerRadius: 8)
+                    .stroke(Color.blue.opacity(0.45), lineWidth: 1)
+            }
+        }
+        .buttonStyle(.plain)
+        .disabled(tagReader.isBusy)
+        .opacity(tagReader.isBusy ? 0.5 : 1)
+    }
+
+    private var topButtonHeight: CGFloat {
+        tagReader.hasParsedPayload ? 36 : 90
     }
 }
 
@@ -342,6 +393,56 @@ private struct EditableHexSection: View {
         Label(isWriting ? "Writing…" : "Write Tag", systemImage: "wave.3.right")
             .font(.subheadline)
             .frame(maxWidth: .infinity)
+    }
+}
+
+private struct SummaryFieldRow: View {
+    let field: OpenTag3DField
+    let focusedEditor: FocusState<EditorFocus?>.Binding
+    let onCommit: (String, String) -> Void
+
+    @State private var humanText: String
+
+    init(
+        field: OpenTag3DField,
+        focusedEditor: FocusState<EditorFocus?>.Binding,
+        onCommit: @escaping (String, String) -> Void
+    ) {
+        self.field = field
+        self.focusedEditor = focusedEditor
+        self.onCommit = onCommit
+        _humanText = State(initialValue: field.humanReadableText)
+    }
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+            Text(field.name)
+                .font(.system(size: 12, weight: .semibold))
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .fixedSize(horizontal: false, vertical: true)
+
+            TextField("Human readable value", text: $humanText)
+                .font(.system(size: 13, weight: .medium))
+                .foregroundStyle(.black)
+                .focused(focusedEditor, equals: .field(id: field.id, input: .human))
+                .onSubmit { commit() }
+                .accessibilityLabel("\(field.name) human readable value")
+                .humanFieldStyle()
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .onChange(of: focusedEditor.wrappedValue) { oldValue, newValue in
+            if oldValue == .field(id: field.id, input: .human), oldValue != newValue {
+                commit()
+            }
+        }
+        .onChange(of: field.humanReadableText) { _, newValue in
+            humanText = newValue
+        }
+    }
+
+    private func commit() {
+        onCommit(field.id, humanText)
     }
 }
 

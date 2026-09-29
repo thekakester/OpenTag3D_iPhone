@@ -181,9 +181,11 @@ private final class QRCodeCameraViewController: UIViewController,
 
             self.captureSession.beginConfiguration()
             do {
-                guard let camera = AVCaptureDevice.default(for: .video) else {
+                guard let camera = self.preferredBackCamera() else {
                     throw QRCodeScannerError.cameraUnavailable
                 }
+                try self.configureFocus(for: camera)
+
                 let cameraInput = try AVCaptureDeviceInput(device: camera)
                 guard self.captureSession.canAddInput(cameraInput) else {
                     throw QRCodeScannerError.cameraInputUnavailable
@@ -205,6 +207,50 @@ private final class QRCodeCameraViewController: UIViewController,
                 self.reportFailure(error)
             }
         }
+    }
+
+    /// Prefers a virtual camera that can switch to the ultra-wide constituent
+    /// when the main wide camera reaches its minimum focusing distance.
+    private func preferredBackCamera() -> AVCaptureDevice? {
+        let preferredDeviceTypes: [AVCaptureDevice.DeviceType] = [
+            .builtInTripleCamera,
+            .builtInDualWideCamera,
+            .builtInWideAngleCamera
+        ]
+
+        for deviceType in preferredDeviceTypes {
+            if let camera = AVCaptureDevice.default(
+                deviceType,
+                for: .video,
+                position: .back
+            ) {
+                return camera
+            }
+        }
+        return AVCaptureDevice.default(for: .video)
+    }
+
+    private func configureFocus(for camera: AVCaptureDevice) throws {
+        try camera.lockForConfiguration()
+        defer { camera.unlockForConfiguration() }
+
+        if camera.isVirtualDevice {
+            camera.setPrimaryConstituentDeviceSwitchingBehavior(
+                .auto,
+                restrictedSwitchingBehaviorConditions: []
+            )
+        }
+
+        if camera.isFocusPointOfInterestSupported {
+            camera.focusPointOfInterest = CGPoint(x: 0.5, y: 0.5)
+        }
+        if camera.isFocusModeSupported(.continuousAutoFocus) {
+            camera.focusMode = .continuousAutoFocus
+        }
+        if camera.isAutoFocusRangeRestrictionSupported {
+            camera.autoFocusRangeRestriction = .near
+        }
+        camera.isSubjectAreaChangeMonitoringEnabled = true
     }
 
     private func reportFailure(_ error: Error) {
